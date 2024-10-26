@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=gtkdot
+Exec=gtkdot
+Icon=io.gitlab.vgmkr.dot
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true

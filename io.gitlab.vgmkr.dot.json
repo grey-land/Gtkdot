@@ -1,0 +1,57 @@
+{
+    "id" : "io.gitlab.vgmkr.dot",
+    "runtime" : "org.gnome.Platform",
+    "runtime-version" : "46",
+    "sdk" : "org.gnome.Sdk",
+    "sdk-extensions" : [
+        "org.freedesktop.Sdk.Extension.vala"
+    ],
+    "command" : "gtkdot",
+    "finish-args" : [
+        "--share=network",
+        "--share=ipc",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--socket=wayland"
+    ],
+    "build-options" : {
+        "append-path" : "/usr/lib/sdk/vala/bin",
+        "prepend-ld-library-path" : "/usr/lib/sdk/vala/lib"
+    },
+    "cleanup" : [
+        "/include",
+        "/lib/pkgconfig",
+        "/man",
+        "/share/doc",
+        "/share/gtk-doc",
+        "/share/man",
+        "/share/pkgconfig",
+        "/share/vala",
+        "*.la",
+        "*.a"
+    ],
+    "modules" : [
+        {
+            "name": "graphviz",
+            "buildsystem": "autotools",
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/12.1.2/graphviz-12.1.2.tar.gz",
+                    "sha256": "f219ef266ffe68ba7d41eec8a716f1dfa1152e1987ff50f3b1dde6aa19f5d7de"
+                }
+            ]
+        },
+        {
+            "name" : "gtkdot",
+            "builddir" : true,
+            "buildsystem" : "meson",
+            "sources" : [
+                {
+                    "type" : "git",
+                    "url" : "file:///home/red/Projects/Gtk"
+                }
+            ]
+        }
+    ]
+}
