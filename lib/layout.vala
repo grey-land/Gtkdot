@@ -1,268 +1,226 @@
 namespace Gtkdot {
 
-	public enum GraphMemberKind {
-		NODE,
-		EDGE;
+
+	/**
+	 * Edge class contain information about connected nodes.
+	 *
+	 * Implements `IGraphMember` interface.
+	 */
+	protected class Edge : GLib.Object, IGraphMember {
+
+		public uint start { get; construct; }
+		public uint end { get; construct; }
+	 	public string extra { get; set; default = ""; }
+
+		private Rendering[] _renderings = {};
+		private bool _selected = false;
+		private Gtk.Allocation? _allocation = null;
+
+		public Edge.new_from_id( uint start, uint end ) {
+			GLib.Object(start: start, end: end);
+		}
+
+		public GraphMemberKind get_kind () {
+			return GraphMemberKind.EDGE;
+		}
+
+		public void set_selected(bool val) {
+			this._selected = val;
+		}
+
+		public bool is_selected() {
+			return this._selected;
+		}
+
+		public void set_renderings(Rendering[] val) {
+			this._renderings = val;
+			// when new renderings are assigned,
+			// then we null _allocation to re-calculate it
+			this._allocation = null;
+		}
+
+		public Rendering[] get_renderings() {
+			return _renderings;
+		}
+
+		public string get_label() {
+			return "(%d>>%d)".printf( (int) this.start, (int) this.end );
+		}
+
+		public Gtk.Allocation get_allocation() {
+
+			// If allocation is not assigned
+			if ( this._allocation == null ) {
+
+				// initialize allocation with default values
+				this._allocation = {
+						0, 0, default_child_width, default_child_height
+					};
+
+				// Build a path that contains all rendering sub-paths.
+				Gsk.PathBuilder pb = new Gsk.PathBuilder();
+				foreach ( var r in this.get_renderings() ) {
+					pb.add_path(r.path);
+				}
+
+				// Get bounds of the resulted path
+				Graphene.Rect bounds;
+				pb.to_path().get_bounds(out bounds);
+
+				// and assign allocation from bounds
+				this._allocation = {
+					(int) bounds.origin.x, (int) bounds.origin.y,
+					(int) bounds.size.width, (int) bounds.size.height
+				};
+			}
+
+			return this._allocation;
+		}
+
 	}
 
-	public class GraphLayoutChild : Gtk.LayoutChild, GraphMember {
 
-		// public GraphLayoutKind kind { get; construct; };
+	/**
+	 *
+	 */
+	public class Node: Gtk.LayoutChild, IGraphMember {
 
-		private int idx;
-		private GLib.List<int> edge_headed;
-		private GLib.List<int> edge_tailed;
-		private Rendering[] renderings;
-		private string _margin;
-		private string _width;
-		private string _height;
-		private string _pos;
-		private double dot_margin_x  { get { return double.parse( _margin.split(",")[0] ) / 0.0104; } }
-		private double dot_margin_y  { get { return double.parse( _margin.split(",")[1] ) / 0.0104; } }
-		private double dot_width     { get { return from_inches( double.parse(_width) )  - dot_margin_x ; } }
-		private double dot_height    { get { return from_inches( double.parse(_height) )  - dot_margin_y  ;  } }
-		private double dot_x         { get { return double.parse( _pos.split(",")[0] ) - ( dot_width / 2 ); } }
-		private double dot_y         { get { return double.parse( _pos.split(",")[1] ) - ( dot_height / 2 ); } }
+		public uint id { get; construct; }
+		public string extra { get; set; default = ""; }
 
+		private Rendering[] _renderings = {};
+		private bool _selected = false;
+		private Gtk.Allocation? _allocation = null;
 
-		public GraphLayoutChild (Gtk.LayoutManager manager, Gtk.Widget child, int idx) {
+		public Node (Gtk.LayoutManager manager, Gtk.Widget child, uint id) {
 			GLib.Object(
 				layout_manager: manager,
-				child_widget: child
+				child_widget: child,
+				id: id
 			);
-			this.renderings = {};
-			this.idx = idx;
 		}
 
-		public void add_edge_tailed (int edge_id) { this.edge_tailed.append( edge_id ); }
-
-		public void add_edge_headed (int edge_id) { this.edge_headed.append( edge_id ); }
-
-		public void allocate (Gtk.Widget parent, int width, int height, int baseline) {
-			this.child_widget.margin_top    = (int) this.dot_margin_y / 2;
-			this.child_widget.margin_bottom = (int) this.dot_margin_y / 2;
-			this.child_widget.margin_start  = (int) this.dot_margin_x / 2;
-			this.child_widget.margin_end    = (int) this.dot_margin_x / 2;
-			this.child_widget.allocate_size ({
-						(int) dot_x, (int) dot_y,
-						(int) dot_width, (int) dot_height }, baseline );
+		public GraphMemberKind get_kind () {
+			return GraphMemberKind.NODE;
 		}
 
-		public Gsk.RoundedRect get_rounded_rect(float? radius = 0) {
-			return Gsk.RoundedRect().init_from_rect (
-						Graphene.Rect().init(
-							(float) dot_x, (float) dot_y, (float) dot_width, (float) dot_height ), radius);
+		public void set_renderings(Rendering[] val) {
+			this._renderings = val;
+			this._allocation = null;
+		}
+		public Rendering[] get_renderings() {
+			return this._renderings;
 		}
 
-		protected Rendering[] get_renderings() {
-			return renderings;
+		public void set_selected(bool val) {
+			this._selected = val;
 		}
 
-		protected void set_renderings( Rendering[] renderings ) {
-			this.renderings = renderings;
+		public bool is_selected() {
+			return this._selected;
 		}
 
-		public override void parse_json(Json.Object obj, Pango.Context pctx) {
-			this.validate_json(obj);
-			if ( obj.has_member( "margin" ) ) this._margin = obj.get_string_member("margin");
-			if ( obj.has_member( "width"  ) ) this._width  = obj.get_string_member("width");
-			if ( obj.has_member( "height" ) ) this._height = obj.get_string_member("height");
-			if ( obj.has_member( "pos"    ) ) this._pos    = obj.get_string_member("pos");
-			this.renderings = Rendering.xdot_parse( obj, pctx );
-		}
+		public Gtk.Allocation get_allocation() {
 
-		public override void render(Gtk.Snapshot snapshot) {
+			// If allocation is not assigned
+			if ( this._allocation == null ) {
 
-			if ( ! child_widget.should_layout () )
-				return;
+				// initialize allocation with default values
+				this._allocation = {
+						0, 0, default_child_width, default_child_height
+					};
 
-			// Gtk Border
-			Gdk.RGBA color = Gdk.RGBA();
-			color.parse("#e80e0e");
-			snapshot.append_border(
-					this.get_rounded_rect(),
-					// top, right, bottom and left
-					{ 1, 1, 1, 1 }, { color, color, color, color } );
-
-			foreach ( var r in this.renderings ) {
-				if ( r.x_dot == "_draw_" )
-					r.render(snapshot);
+				// Get main _draw_ rendering and set `_allocation` to it's path bounds
+				foreach ( var r in this.get_renderings() ) {
+					if ( r.x_dot == "_draw_" ) {
+						Graphene.Rect bounds;
+						if ( r.path.get_bounds(out bounds) ) {
+							this._allocation = {
+										(int) bounds.origin.x    + default_margin,
+										(int) bounds.origin.y    + default_margin,
+										(int) bounds.size.width  - ( default_margin * 2 ),
+										(int) bounds.size.height - ( default_margin * 2 )
+							};
+						}
+						break;
+					}
+				}
 			}
+
+			return this._allocation;
 		}
 
-		public string get_dot_id () {
-			return "n%d".printf(this.idx);
-		}
-
-		public string to_dot () {
-			Gtk.Requisition child_req;
-			this.child_widget.get_preferred_size (out child_req, null);
-			// generate dot description for widget
-			return "%s [ id=\"%s\" width=%g height=%g margin=\"%g,%g\" ];".printf(
-					this.get_dot_id(),
-					this.get_dot_id(),
-					// detect max widget's width
-					to_inches( (double) int.max ( default_child_width, child_req.width ) ),
-					// detect max widget's height
-					to_inches( (double) int.max ( default_child_height, child_req.height ) ),
-					// detect max margins of widget's x-axis
-					to_inches( double.max ( 1,
-								(double) (
-									this.child_widget.margin_start +
-									this.child_widget.margin_end ) / 2 ) ),
-					// detect max margins of widget's y-axis
-					to_inches( double.max ( 1,
-								(double) (
-									this.child_widget.margin_top +
-									this.child_widget.margin_bottom ) / 2 ) )
-				);
+		public Gsk.RoundedRect get_rounded_border( float stroke = 1, float radius = 0) {
+			return Gsk.RoundedRect().init_from_rect (
+					Graphene.Rect().init(
+						(float) this._allocation.x - stroke,
+						(float) this._allocation.y - stroke,
+						(float) this._allocation.width + (stroke * 2),
+						(float) this._allocation.height + (stroke * 2)
+					), radius);
 		}
 
 	}
-
 
 
 	public class GraphLayoutManager : Gtk.LayoutManager {
 
+		public Rendering[] renderings;
 
+		private uint n_nodes = 0;
+		public HashTable<uint, Node*> nodes = new HashTable<uint, Node*> (direct_hash, direct_equal);
+		public GLib.List<Edge> edges;
 
-		private string margin;
-		private string bb;
-		private GLib.List<Edge> edges;
-		private Rendering[] shapes;
-
-		/*** Margin for X axis computed from graphviz */
-		protected double dot_margin_x  {
-			get { return margin != null && margin.split(",").length == 2 ?
-					from_inches( double.parse(margin.split(",")[0]) ) : 0; } }
-
-		/*** Margin for Y axis computed from graphviz */
-		protected double dot_margin_y  {
-			get { return margin != null && margin.split(",").length == 2 ?
-					from_inches( double.parse(margin.split(",")[1]) ) : 0; } }
-
-		/*** Width computed from graphviz */
-		protected double dot_width {
-			get { return bb != null && bb.split(",").length == 4 ? double.parse( bb.split(",")[2] ) /*- dot_margin_x*/ : 0; } }
-
-		/*** Height computed from graphviz */
-		protected double dot_height {
-			get { return bb != null && bb.split(",").length == 4 ? double.parse( bb.split(",")[3] ) /*- dot_margin_y*/ : 0; } }
-
-		/*** Main GraphView Widget */
-		public GraphView view { get { return get_widget () as GraphView; } }
-
-		public GraphLayoutManager () {
-			this.edges = new GLib.List<Edge> ();
+		public GraphLayoutManager() {
+			this.edges = new GLib.List<Edge>();
 		}
 
-		/**
-		 * Add new edge.
-		 *
-		 * Creates new edge, add it to list of edges,
-		 * and add back-references to connected nodes.
-		 */
-		public void add_edge (int head, int tail, string extra = "" ) {
-
-			int edge_id = (int) edges.length();
-			var edge = new Edge( edge_id, head, tail, extra );
-			edges.append(edge);
-
-			GraphLayoutChild lc;
-			lc = this.get_element( head );
-			lc.add_edge_headed(edge_id);
-
-			lc = this.get_element( tail );
-			lc.add_edge_tailed(edge_id);
-			print("Added Edge: %s\n", edge.to_dot () );
-		}
-
-		/**
-		 * Retrieve layout child
-		 *
-		 * @param pos index of layout child to retrieve
-		 */
-		public GraphLayoutChild? get_element(uint pos) {
-			Gtk.Widget? child = null;
-			uint i = 0;
-			for ( child = view.get_first_child (); child != null; child = child.get_next_sibling() ) {
-				// if (!child.should_layout ()) continue;
-				if ( i == pos )
-					return this.get_layout_child( child ) as GraphLayoutChild;
-				i ++;
-			}
-			return null;
-		}
-
-		/*** Get number of layout children */
-		public int n_elements() {
-			int i = 0;
-			Gtk.Widget? child = null;
-			for ( child = view.get_first_child (); child != null; child = child.get_next_sibling() ) {
-				// if (!child.should_layout ()) continue;
-				i ++;
-			}
-			return i;
-		}
-
-		/*** Get index for given widget */
-		public int index_element(Gtk.Widget widget) {
-			int i = 0;
-			Gtk.Widget? child = null;
-			for ( child = view.get_first_child (); child != null; child = child.get_next_sibling() ) {
-				// if ( !child.should_layout () ) continue;
-				if ( child == widget )
-					break;
-				i ++;
-			}
-			return i;
-		}
-
-		/**
-		 * Function to detect edge being clicked
-		 */
-		public Edge? edge_contains (Graphene.Point point) {
-
-			// We loop from last to first edge as last is rendered on top
-			for ( int i = (int) this.edges.length() - 1; i >= 0; i -- ) {
-				var edge = this.edges.nth_data(i);
-				if ( edge == null )
-					continue;
-				if ( edge.contains( point ) )
-					return edge;
-			}
-			return null;
-		}
-
-		public void render(Gtk.Snapshot snapshot) {
-
-			// graphviz
-			foreach ( var shape in this.shapes )
-				shape.render(snapshot);
-
-			GraphLayoutChild layout_child;
-
-			for ( int i = 0; i < this.n_elements(); i ++ ) {
-				layout_child = this.get_element(i);
-				if ( layout_child.child_widget.should_layout () )
-					layout_child.render(snapshot);
-			}
-
-			this.edges.@foreach( ( edge )=>{
-				if ( edge_is_visible( edge ) )
-					edge.render( snapshot );
-			});
-
-
+		public Node get_member_from_widget ( Gtk.Widget widget ) {
+			return this.get_layout_child( widget ) as Node;
 		}
 
 		public override Gtk.LayoutChild create_layout_child (Gtk.Widget container, Gtk.Widget child) {
-			return new GraphLayoutChild(this, child, index_element(child) );
+			Node member = new Node(this, child, n_nodes );
+			Node* ptr = member;
+			nodes.insert( n_nodes, ptr);
+			n_nodes ++;
+			return member;
 		}
 
 		protected override Gtk.SizeRequestMode get_request_mode (Gtk.Widget widget) {
 			return Gtk.SizeRequestMode.CONSTANT_SIZE;
 		}
+
+		double to_inches( double val ) {
+			return val / 25.4 / 3;
+		}
+
+		/*
+
+		double from_inches( double val ) {
+			return val * 25.4 * 3;
+		}
+
+		protected void parse_margin(Gtk.Widget widget, string margin) {
+			double margin_x = 0;
+			double margin_y = 0;
+			// Margin for X axis computed from graphviz
+			margin_x = margin != null && margin.split(",").length == 2
+						? from_inches( double.parse(margin.split(",")[0]) )
+						: 0;
+			// Margin for Y axis computed from graphviz
+			margin_y = margin != null && margin.split(",").length == 2
+						? from_inches( double.parse(margin.split(",")[1]) )
+						: 0;
+			// Set margin for main GraphView widget
+			widget.margin_top = (int) (margin_y / 2);
+			widget.margin_bottom = (int) (margin_y / 2);
+			widget.margin_start = (int) (margin_x / 2);
+			widget.margin_end = (int) (margin_x / 2);
+
+		}
+
+		*/
 
 		protected override void measure (Gtk.Widget widget,
 										Gtk.Orientation orientation,
@@ -271,30 +229,48 @@ namespace Gtkdot {
 										out int natural,
 										out int minimum_baseline,
 										out int natural_baseline) {
+
+			if ( ! widget.get_type().is_a(typeof(GraphView)) ) {
+				critical ( "Expected GraphView widget");
+				base.measure( widget, orientation, for_size,
+					out minimum, out natural, out minimum_baseline, out natural_baseline );
+				return;
+			}
+
 			try {
 
 				// we use -Tjson0 instead of -Tjson as we only need bb,margin attributes
 				// for measuring the main graph widget.
-				Json.Object obj = graphviz_exec( this.generate_dot_for_preferred_size(), {
+				Json.Object obj = graphviz_exec( this.generate_dot_for_preferred_size( widget ), {
 										"dot",
 											"-Gdpi=%g".printf(
-												(double) view.get_settings().gtk_xft_dpi / 1024 ),
+												(double) widget.get_settings().gtk_xft_dpi / 1024 ),
 											"-Tjson0" });
+				/*
+				// If graphviz contains margin attribute and main
+				// widget doesn't have any margin assigned, then
+				// update widget's margin to ones produced from
+				// graphviz.
+				if ( obj.has_member("margin") && (
+						widget.margin_top == widget.margin_bottom == widget.margin_start == widget.margin_end == 0
+					) )
+					this.parse_margin( widget, obj.get_string_member("margin") );
+				*/
 
-				this.bb = obj.get_string_member ("bb");
-				this.margin = obj.get_string_member ("margin");
-
-				// Set margin for main GraphView widget
-				view.margin_top = (int) (dot_margin_y / 2);
-				view.margin_bottom = (int) (dot_margin_y / 2);
-				view.margin_start = (int) (dot_margin_x / 2);
-				view.margin_end = (int) (dot_margin_x / 2);
+				string bb = obj.get_string_member ("bb");
 
 				if ( orientation == Gtk.Orientation.HORIZONTAL )
-					minimum = natural = (int) ( dot_width /* + dot_margin_x */ );
+					//  Width computed from graphviz
+					minimum = natural = bb != null && bb.split(",").length == 4
+						? (int) ( double.parse(bb.split(",")[2])  )
+						: 0;
 				else
-					minimum = natural = (int) ( dot_height /* + dot_margin_y */ );
+					// Height computed from graphviz
+					minimum = natural = bb != null && bb.split(",").length == 4
+						? (int) ( double.parse( bb.split(",")[3])  )
+						: 0;
 				minimum_baseline = natural_baseline= -1;
+
 			} catch ( GLib.Error e ) {
 				warning ( "Error while measuring graph : %s. Fallback to default", e.message );
 				base.measure( widget, orientation, for_size,
@@ -303,28 +279,72 @@ namespace Gtkdot {
 		}
 
 		protected override void allocate (Gtk.Widget widget, int width, int height, int baseline) {
+
+			if ( ! widget.get_type().is_a(typeof(GraphView)) ) {
+				critical ( "Expected GraphView widget");
+				base.allocate( widget, width, height, baseline );
+				return;
+			}
+
 			try {
 
-				// We execute graphviz setting the size allocated to the widget
-				Json.Object obj = graphviz_exec( this.generate_dot_for_preferred_size(), {
+				// Get maximum size from previous allocated size and current allocation.
+				double w = to_inches( double.max( widget.get_width(), (double) width) );
+				double h = to_inches( double.max( widget.get_height(), (double) height) );
+
+				// Execute graphviz including size flag
+				Json.Object obj = graphviz_exec( this.generate_dot_for_preferred_size( widget ), {
 										"dot",
-											"-Gsize=%g,%g".printf( to_inches( (double) width ), to_inches( (double) height ) ),
 											"-Gdpi=%g".printf(
-												(double) view.get_settings().gtk_xft_dpi / 1024),
+												(double) widget.get_settings().gtk_xft_dpi / 1024),
+											"-Gsize=%g,%g".printf( w, h),
+											// use "!" to direct graphviz to use provided size as minimum size.
+											// "-Gsize=%g,%g\\!".printf( w, h),
+											// use request size directly
+											// "-Gsize=%g,%g".printf( to_inches( (double) width ), to_inches( (double) height ) ),
 											"-Tjson" });
-				// update properties
-				this.bb = obj.get_string_member ("bb");
-				this.margin = obj.get_string_member ("margin");
 
-				// Parse all nodes and edges. Once parsed layout children will
-				// contain allocation information.
-				this.parse_json(obj);
+				// Parse graph renderings, useful to draw
+				// graph background, label, ...
+				this.renderings = Rendering.xdot_parse( obj );
 
-				// Iterate through nodes and allocate graphviz's comptuted positions.
-				GraphLayoutChild layout_child;
-				for ( int i = 0; i < this.n_elements(); i ++ ) {
-					layout_child = this.get_element(i);
-					layout_child.allocate(widget, width, height, baseline);
+				// Parse nodes
+				if ( obj.has_member("objects") ) {
+					var arr = obj.get_array_member ("objects");
+					if ( arr != null ) {
+						arr.foreach_element( (array, idx, element_node) =>{
+							var _obj = element_node.get_object();
+							if ( _obj != null && _obj.has_member("id") ) {
+								int member_id = int.parse( _obj.get_string_member("id") );
+								if ( this.nodes.contains(member_id) ) {
+									Node node = this.nodes.get(member_id);
+									node.set_renderings( Rendering.xdot_parse(_obj, { "_draw_" }) );
+									node.child_widget.allocate_size( node.get_allocation(), baseline );
+								}
+							}
+						});
+					}
+					obj.remove_member ("objects");
+				}
+
+				// Parse edges
+				if ( obj.has_member("edges") ) {
+					var arr = obj.get_array_member ("edges");
+					if ( arr != null ) {
+						arr.foreach_element( (array, idx, element_node) =>{
+							var _obj = element_node.get_object();
+							if ( _obj != null && _obj.has_member("id") ) {
+								int member_id = int.parse(  _obj.get_string_member("id") );
+								Edge edge = this.edges.nth_data(member_id);
+								edge.set_renderings( Rendering.xdot_parse(_obj) );
+								foreach ( var r in edge.get_renderings() ) {
+									if ( r.contains_text() )
+										r.expand_text( widget.get_pango_context() );
+								}
+							}
+						});
+					}
+					obj.remove_member ("edges");
 				}
 
 			} catch ( GLib.Error e ) {
@@ -333,111 +353,96 @@ namespace Gtkdot {
 			}
 		}
 
+		private string generate_dot_for_preferred_size( Gtk.Widget parent ) {
 
-		/*** check whether edge is visible */
-		private bool edge_is_visible( Edge edge ) {
-			return this.get_element( edge.get_head() ).child_widget.should_layout () &&
-					this.get_element( edge.get_tail() ).child_widget.should_layout ();
-		}
-
-		/**
-		 * Parses graphviz xdot result and generate render context for diagram.
-		 *
-		 * The provided json object is expected to be the result of a cmd `graphviz_exec`
-		 * that been run explicitly with `-Tjson` flag. This is because the `-Tjson` flag
-		 * contains extended information for the graph ( _draw_, _ldraw_, ... keys ) that
-		 * is being used for render the edges, arrows, borders, ... .
-		 *
-		 */
-		private void parse_json ( Json.Object jdot ) {
-
-			// Parse nodes
-			if ( jdot.has_member("objects") ) {
-				var objects = jdot.get_array_member ("objects");
-				assert( objects != null );
-				GraphLayoutChild? layout_child = null;
-				objects.foreach_element( (array, idx, element_node) =>{
-					layout_child = this.get_element(idx);
-
-					try {
-						layout_child.validate_json( element_node.get_object() );
-					} catch ( GLib.Error e ) {
-						critical( e.message );
-					}
-
-					layout_child.parse_json(element_node.get_object(), view.get_pango_context() );
-
-				});
-				jdot.remove_member ("objects");
-			}
-
-			// Parse edges
-			if ( jdot.has_member("edges") ) {
-				// this.edges = new GLib.List<Edge> ();
-				var _edges = jdot.get_array_member ("edges");
-				_edges.foreach_element( (array, idx, element_node) =>{
-					Edge edge = this.edges.nth_data( idx );
-					try {
-						edge.validate_json( element_node.get_object() );
-					} catch ( GLib.Error e ) {
-						critical( e.message );
-					}
-					edge.parse_json(element_node.get_object(), view.get_pango_context() );
-				});
-				jdot.remove_member ("edges");
-			}
-
-			// Parse graph
-			this.shapes = Rendering.xdot_parse( jdot, view.get_pango_context(), {"_draw_"});
-		}
-
-		private string generate_dot_for_preferred_size() {
+			GraphView view = parent as GraphView;
 
 			// Initialise graph
-			string dot = "digraph {\n" +
-							// "\trankdir=\"LR\"\n" +
-							"\tmargin=\"0.4,0.4\"\n" +
-							"\tbgcolor=\"white:lightblue\"\n" +
-							// "\tgraph [ margin=\"0.4,0.4\" bgcolor=\"white:lightblue\" directed=true ];\n" +
-							"\tnode [ shape=\"box\" margin=\"0,0\" fixedsize=true ];\n";
+			string dot = "digraph {\n"
+							+ "\tpad = \"%g\"\n".printf( view.pad )
+							+ "\t" + view.extra + "\n"
+							// Force node shape to box instead of default ellipse, as
+							// we will use node's layout to render Gtk.Widgets inside
+							// them. Additionally set fixed size as we are providing
+							// the Gtk.Widgets preferred size (see below).
+							+ "\tnode [ shape=\"box\" margin=\"0,0\" fixedsize=true ];\n"
+						;
 
-			// Add nodes
-			GraphLayoutChild layout_child;
-			for ( int i = 0; i < this.n_elements(); i ++ ) {
-				layout_child = this.get_element(i);
-				dot += "\t%s\n".printf( layout_child.to_dot() );
-				/*
+			// Serialize nodes to dot format including underline
+			// Gtk.Widgets preferred width and height.
+			var keys = this.nodes.get_keys ();
+			for ( int _k = 0; _k < keys.length(); _k ++ ) {
+
+				Node member = this.nodes.get( keys.nth_data(_k) );
+
 				Gtk.Requisition child_req;
-				layout_child.child_widget.get_preferred_size (out child_req, null);
-				// generate dot description for widget
-				dot += "\tn%d [ id=\"n%d\" width=%g height=%g margin=\"%g,%g\" ];\n".printf(
-					i, i,
-					// detect max widget's width
-					to_inches( (double) int.max ( default_child_width, child_req.width ) ),
-					// detect max widget's height
-					to_inches( (double) int.max ( default_child_height, child_req.height ) ),
-					// detect max margins of widget's x-axis
-					to_inches( double.max ( 1,
-								(double) (
-									layout_child.child_widget.margin_start +
-									layout_child.child_widget.margin_end ) / 2 ) ),
-					// detect max margins of widget's y-axis
-					to_inches( double.max ( 1,
-								(double) (
-									layout_child.child_widget.margin_top +
-									layout_child.child_widget.margin_bottom ) / 2 ) )
-				);
-				*/
+				member.child_widget.get_preferred_size (out child_req, null);
+
+				dot += "\tn%d [ id=\"%d\" label=\"%s\" width=%g height=%g %s ];\n".printf(
+						(int) member.id, (int) member.id, member.get_label(),
+						// detect max widget's width
+						to_inches(
+							(double) int.max ( default_child_width, child_req.width )
+							+ ( default_margin * 2 ) ),
+						// detect max widget's height
+						to_inches(
+							(double) int.max ( default_child_height, child_req.height)
+							+ ( default_margin * 2 ) ),
+						// add user provided instructions
+						member.extra
+					);
 			}
 
-			// Add edges
-			foreach ( var edge in this.edges )
-				dot += "\t%s\n".printf( edge.to_dot() );
+			// Serialize edges to dot format.
+			for ( int i = 0; i < this.edges.length(); i ++ ) {
+				Edge edge = this.edges.nth_data(i);
+				dot += "\tn%d -> n%d [ id=\"%d\" label=\"%s\" %s ];\n".printf(
+							(int) edge.start, (int) edge.end, i, edge.get_label(), edge.extra);
+			}
 
-
-			dot += "\n}\n";
+			dot += "\n}\n"; // Close graph
 			return dot;
 		}
+
+
+		/*
+		private uint n_members = 0;
+		private HashTable<uint, IGraphMember*> members = new HashTable<uint, IGraphMember*> (direct_hash, direct_equal);
+		public Node add_node ( Gtk.Widget child ) {
+			Node member = new Node(this, child, n_members );
+			IGraphMember* ptr = member;
+			members.insert( n_members, ptr );
+			n_members ++;
+			return member;
+		}
+		public Edge add_edge (uint start, uint end, string extra = "") {
+			Edge e = new Edge.new_from_id( start, end );
+			e.extra = extra;
+			IGraphMember* ptr = e;
+			members.insert( n_members, ptr );
+			n_members ++;
+			return e;
+		}
+
+		 **
+		 * Iterate through graph nodes (nodes/edges)
+		 *
+		 * @param func handle member and return `true` to stop iteration or `false` to continue.
+		 * @param kind set member kind to handle only nodes or edges, or `null` to handle everything.
+
+		public void foreach_member( DelegateMember func, GraphMemberKind? kind = null ) {
+			for ( int i = 0; i < this.nodes.length(); i ++ ) {
+				Node member = this.nodes.nth_data(i);
+				if ( member == null )
+					continue;
+				if ( ( kind == null || kind == member.kind ) && func( member ) )
+					break;
+			}
+
+		}
+		public delegate bool DelegateMember ( Node member );
+		*/
+
 
 	}
 

@@ -1,157 +1,8 @@
 
 namespace Gtkdot {
 
-	public static int default_child_width = 12;
-	public static int default_child_height = 6;
-
-	double to_inches( double val ) {
-		return val / 25.4 / 3;
-	}
-
-	double from_inches( double val ) {
-		return val * 25.4 * 3;
-	}
-
-
-	public errordomain GraphError {
-		DOT_ERROR,
-		CLI_ERROR
-	}
-
-
-	public static Gsk.Path build_eclipse ( Graphene.Rect r ) {
-		var builder = new Gsk.PathBuilder();
-		builder.move_to (
-						r.origin.x - r.size.width,  r.origin.y );
-		builder.cubic_to (
-						r.origin.x - r.size.width,  r.origin.y,
-						r.origin.x - r.size.width,  r.origin.y + r.size.height,
-						r.origin.x,                 r.origin.y + r.size.height );
-		builder.cubic_to (
-						r.origin.x,                 r.origin.y + r.size.height,
-						r.origin.x + r.size.width,  r.origin.y + r.size.height,
-						r.origin.x + r.size.width,  r.origin.y );
-		builder.cubic_to (
-						r.origin.x + r.size.width,  r.origin.y,
-						r.origin.x + r.size.width,  r.origin.y - r.size.height,
-						r.origin.x,                 r.origin.y - r.size.height );
-		builder.cubic_to (
-						r.origin.x,                 r.origin.y - r.size.height,
-						r.origin.x - r.size.width,  r.origin.y - r.size.height,
-						r.origin.x - r.size.width,  r.origin.y );
-		builder.close();
-		return builder.to_path();
-	}
-
 	/**
-	 * Build B-Spine curve from list of points.
-	 *
-	 * @param points list of points to build curve.
-	 * @param close If set to `true` then it will close the path otherwise not. Useful for filling curves.
-	 * @return The result path.
-	 */
-	public static Gsk.Path build_bspline ( Graphene.Point[] points, bool close = false ) {
-		var builder = new Gsk.PathBuilder();
-		for ( int i = 0; i < points.length; i += 3 ) {
-			if ( i == 0 )
-				builder.move_to ( points[i].x, points[i].y );
-			else
-				builder.cubic_to (
-					points[i-2].x, points[i-2].y,
-					points[i-1].x, points[i-1].y,
-					points[i].x,   points[i].y );
-		}
-		if ( close )
-			builder.close();
-		return builder.to_path();
-	}
-
-	/**
-	 * Build Polygon / Polyline paths from list of points.
-	 *
-	 * @param points list of points to poly shape.
-	 * @param close If set to `true` then it will close the path otherwise not. Useful for Polygon shapes
-	 * @return The result path.
-	 */
-	public static Gsk.Path build_poly ( Graphene.Point[] points, bool close = false ) {
-		var builder = new Gsk.PathBuilder();
-		for ( int i = 0; i < points.length; i ++ ) {
-			if ( i == 0 )
-				builder.move_to ( points[i].x, points[i].y );
-			else
-				builder.line_to ( points[i].x, points[i].y );
-		}
-		if ( close )
-			builder.close();
-		return builder.to_path();
-	}
-
-	/**
-	 * Parses array of points describing a Graphviz B-Spine and builds Gsk.Path.
-	 *
-	 * The expected array is in json format as produced Graphviz -Tjson output
-	 * for example
-	 * {{{
-	 * ...
-	 * "_draw_": [
-	 *  	 ...
-	 *   {
-	 *     "op": "b",
-	 *     "points": [[160.390,142.060],[151.200,128.320],[140.980,113.040],[131.420,98.750]]
-	 *   }
-	 * ]
-	 * ...
-	 * "_hdraw_": [
-	 *  	 ...
-	 *   {
-	 *     "op": "P",
-	 *     "points": [[134.570,97.160],[126.100,90.800],[128.750,101.050]]
-	 *   }
-	 * ]
-	 * ...
-	 * }}}
-	 *
-	 * @param arr Array of points already parsed.
-	 * @return List of points.
-	 */
-	public static Graphene.Point[] parse_points( Json.Array arr ) {
-		Graphene.Point[] ret = {};
-		for ( int i = 0; i < arr.get_length(); i ++ ) {
-			ret += Graphene.Point().init(
-				(float) arr.get_array_element(i).get_double_element(0),
-				(float) arr.get_array_element(i).get_double_element(1) );
-		}
-		return ret;
-	}
-
-
-	/**
-	 * Pipes provided dot diagram to graphviz cli and returns json object.
-	 *
-	 * It expects cmd to contain "-Tjson" flag.
-	 */
-	public Json.Object graphviz_exec ( string dot, string[] cmd = { "dot", "-Tjson" } ) throws GLib.Error {
-		debug( "Parsing dot diagram :\n%s", dot );
-		var proc = new GLib.Subprocess.newv(cmd,
-							GLib.SubprocessFlags.STDIN_PIPE | GLib.SubprocessFlags.STDOUT_PIPE );
-		GLib.Bytes stdout_buf = new GLib.Bytes(null);
-		GLib.Bytes stderr_buf = new GLib.Bytes(null);
-		proc.communicate(
-				new GLib.Bytes(dot.data),
-				null,
-				out stdout_buf,
-				out stderr_buf );
-		if ( proc.get_exit_status () != 0 )
-			throw new GraphError.CLI_ERROR("Error while executing graphviz cli : %s", string.joinv(" ", cmd) );
-		Json.Parser parser = new Json.Parser ();
-		debug( "Parsed dot diagram to json representation :\n%s", (string) stdout_buf.get_data () );
-		parser.load_from_data ( (string) stdout_buf.get_data () );
-		Json.Node node = parser.get_root ();
-		return node.get_object ();
-	}
-
-	/**
-	 * Rendering, a class to convert Graphviz x-dot information to Gtk.
+	 * Rendering class converts Graphviz xdot information to Gtk.
 	 *
 	 * Graphviz xdot is an extension to dot format providing additional
 	 * information on how to render a graph. It provides following
@@ -190,17 +41,25 @@ namespace Gtkdot {
 		/*** Color to use for fill */
 		public Gdk.RGBA fill_color;
 
-		/*** pango layout contains all text related information to draw text labels */
-		public Pango.Layout? text_layout;
+		public Gsk.Path path;
+		public Graphene.Point offset;
 
 		// Text related
-		private Graphene.Rect text_bounds;
-		private Graphene.Point text_pos;
-		private bool is_text;
+		public string text_face = "Sans";
+		public Pango.Alignment text_align;
+		public double text_size = 14;
+		public double text_width = 0;
+		public string text_data = "";
+
+		public bool contains_text() {
+			return x_dot == "_ldraw_"   // text label
+				|| x_dot == "_hldraw_"  // head arrow label
+				|| x_dot == "_tldraw_"; // tail arrow label
+		}
 
 		// Shape related
 		private Gsk.FillRule fill_rule;
-		private Gsk.Path path;
+		// private Gsk.Path path;
 		private bool fill;
 		private Gsk.Stroke stroke;
 
@@ -211,23 +70,12 @@ namespace Gtkdot {
 			this.stroke = new Gsk.Stroke(1);
 			this.stroke.set_line_cap( Gsk.LineCap.ROUND );
 			this.stroke.set_line_join( Gsk.LineJoin.ROUND );
-		}
-
-		public void set_text_context ( Pango.Context ctx ) {
-			this.text_layout = new  Pango.Layout(ctx);
-			this.text_layout.set_wrap( Pango.WrapMode.WORD );
-			this.text_pos = Graphene.Point(). init (0, 0);
-			this.is_text = true;
-		}
-
-		public void set_text_pos ( float x, float y ) {
-			this.text_pos = Graphene.Point(). init ( x, y );
+			this.offset = Graphene.Point(). init (0, 0);
 		}
 
 		public void set_path ( Gsk.Path path, bool fill = false ) {
 			this.path = path;
 			this.fill = fill;
-			this.is_text = false;
 		}
 
 		public void set_style ( string style ) {
@@ -254,35 +102,68 @@ namespace Gtkdot {
 		 * @return `true` if point is contained `false` otherwise.
 		 */
 		public bool contains ( Graphene.Point point ) {
-			if ( this.is_text )
-				return this.text_bounds.contains_point ( point );
-			else if ( this.path.is_closed() )
+			if ( this.path.is_closed() )
 				return this.path.in_fill( point, fill_rule);
 			return false;
 		}
 
-		public void render (Gtk.Snapshot snapshot,
+		/*** Pango layout contains all text related information to draw text labels */
+		public Pango.Layout get_pango_layout ( Pango.Context ctx ) {
+			Pango.Layout ret = new Pango.Layout(ctx);
+			ret.set_wrap( Pango.WrapMode.WORD );
+			Pango.FontDescription font = Pango.FontDescription.from_string(this.text_face);
+			font.set_absolute_size( this.text_size * Pango.SCALE );
+			ret.set_font_description ( font );
+			ret.set_alignment(this.text_align);
+			ret.set_width( (int) this.text_width );
+			ret.set_text( this.text_data, -1 );
+			return ret;
+		}
+
+		/*** Calculate text bounding path (pos + size) */
+		public void expand_text ( Pango.Context ctx ) {
+			// Set text position
+			Pango.Layout pl = this.get_pango_layout(ctx);
+			int tw=0;
+			int th=0;
+			// pl.get_size(out tw, out th);
+			pl.get_pixel_size(out tw, out th);
+			Gsk.PathBuilder pb = new Gsk.PathBuilder();
+			pb.add_rect(
+				Graphene.Rect().init(
+						this.offset.x - ( (float) tw / 2),
+						this.offset.y,
+						(float) tw,
+						(float) th ) );
+			pb.close();
+			this.path = pb.to_path();
+		}
+
+		public void render (Gtk.Snapshot snapshot, Pango.Context ctx,
 							Gdk.RGBA? custom_pen_color = null,
 							Gdk.RGBA? custom_fill_color = null ) {
-			if ( ! this.is_text ) {
+			snapshot.save();
+			snapshot.translate(this.offset);
+
+			if ( this.contains_text() ) {
+
+				snapshot.append_layout(
+						this.get_pango_layout(ctx),
+						custom_pen_color == null ? this.pen_color : custom_pen_color );
+			} else {
+
 				if ( this.fill )
 					snapshot.append_fill ( this.path, this.fill_rule,
-										custom_fill_color == null ? this.fill_color : custom_fill_color );
-				snapshot.append_stroke ( this.path, this.stroke,
-										custom_pen_color == null ? this.pen_color : custom_pen_color );
-			} else {
-				snapshot.save();
-				snapshot.translate(this.text_pos);
-				snapshot.append_layout( this.text_layout, custom_pen_color == null ? this.pen_color : custom_pen_color );
-				snapshot.restore();
-				snapshot.append_color({ 0.8f, 0.8f, 0.1f, 0.5f }, this.text_bounds );
+								custom_fill_color == null ? this.fill_color : custom_fill_color );
 
+				snapshot.append_stroke ( this.path, this.stroke,
+								custom_pen_color == null ? this.pen_color : custom_pen_color);
 			}
+			snapshot.restore();
 		}
 
 		public static Rendering[] xdot_parse(
 								Json.Object obj,
-								Pango.Context pctx,
 								string [] members = {
 												"_draw_",
 												"_ldraw_",
@@ -305,7 +186,6 @@ namespace Gtkdot {
 
 						if ( shape == null ) {
 							shape = new Rendering();
-							shape.set_text_context(pctx);
 							shape.x_dot = member;
 						}
 
@@ -331,7 +211,7 @@ namespace Gtkdot {
 							case "E": // Filled ellipse
 							case "e": // Unfilled ellipse
 								shape.set_path(
-									build_eclipse(
+									build_ellipse(
 										Graphene.Rect().init(
 											(float) arr.get_double_element (0),
 											(float) arr.get_double_element (1),
@@ -380,49 +260,27 @@ namespace Gtkdot {
 								break;
 
 							case "t": // Set font characteristics
-							case "F": // Set font
-								if ( shape.text_layout == null )
-									 shape.set_text_context(pctx);
-								Pango.FontDescription font = Pango.FontDescription.from_string (
-										graphviz_op.get_string_member("face")
-									);
-								font.set_absolute_size(
-									graphviz_op.get_double_member("size") * Pango.SCALE );
-								// set font face
-								shape.text_layout.set_font_description ( font );
 								break;
-
+							case "F": // Set font
+								shape.text_face = graphviz_op.get_string_member("face");
+								shape.text_size = graphviz_op.get_double_member("size");
+								break;
 							case "T": // Set text
-								switch ( graphviz_op.get_string_member("align") ) {
+								var pos = graphviz_op.get_array_member("pt");
+								shape.offset = Graphene.Point(). init (
+									(float) pos.get_double_element (0),
+									(float) pos.get_double_element (1) );
+								switch (  graphviz_op.get_string_member("align") ) {
 									case "c":
-										shape.text_layout.set_alignment( Pango.Alignment.CENTER );
+										shape.text_align = Pango.Alignment.CENTER;
 										break;
 									// ....
 									default:
-										shape.text_layout.set_alignment( Pango.Alignment.LEFT );
+										shape.text_align = Pango.Alignment.LEFT;
 										break;
 								}
-								shape.text_layout.set_width( (int) graphviz_op.get_double_member("width") );
-								shape.text_layout.set_text( graphviz_op.get_string_member("text"), -1 );
-
-								// Set text position
-								var pos = graphviz_op.get_array_member("pt");
-
-								int tw=0;
-								int th=0;
-								// shape.text_layout.get_size(out tw, out th);
-								// shape.set_text_pos(
-								//	(float) pos.get_double_element (0),
-								//	(float) pos.get_double_element (1) - ( (float) th  / Pango.SCALE / 2 ) );
-								shape.text_layout.get_pixel_size(out tw, out th);
-								shape.set_text_pos(
-									(float) pos.get_double_element (0),
-									(float) pos.get_double_element (1) /* - ( (float) th / 2 ) */ );
-								shape.text_bounds = Graphene.Rect().init(
-										shape.text_pos.x - ( (float) tw / 2),
-										shape.text_pos.y,
-										(float) tw,
-										(float) th );
+								shape.text_width = (int) graphviz_op.get_double_member("width");
+								shape.text_data = graphviz_op.get_string_member("text");
 								ret += shape;
 								shape = null;
 								break;
@@ -439,13 +297,28 @@ namespace Gtkdot {
 
 	}
 
+	public enum GraphMemberKind {
+		NODE,
+		EDGE;
 
+		public string to_string() {
+			switch (this) {
+				case NODE:
+					return "Graph Node";
+				case EDGE:
+					return "Graph Edge";
+				default:
+					assert_not_reached();
+			}
+		}
 
-	public interface GraphMember : GLib.Object {
+	}
 
-		public virtual void render(Gtk.Snapshot snapshot) {
+	public interface IGraphMember : GLib.Object {
+
+		public virtual void render(Gtk.Snapshot snapshot, Pango.Context ctx) {
 			foreach ( var rendering in this.get_renderings() )
-				rendering.render(snapshot);
+				rendering.render(snapshot, ctx);
 		}
 
 		public virtual bool contains (Graphene.Point point) {
@@ -456,127 +329,31 @@ namespace Gtkdot {
 			return false;
 		}
 
-		public virtual void validate_json(Json.Object obj) throws GraphError  {
-			if ( ! obj.has_member("id") || this.get_dot_id () != obj.get_string_member("id")  )
-				throw new GraphError.DOT_ERROR("Could not parse id for: %s\n", this.get_dot_id () );
+		public abstract GraphMemberKind get_kind ();
+
+		public virtual string get_label() {
+			return "";
 		}
 
-		public virtual void parse_json( Json.Object obj, Pango.Context pctx ) {
-			set_renderings( Rendering.xdot_parse( obj, pctx ) );
+		public abstract Rendering[] get_renderings();
+		public abstract void set_renderings( Rendering[] val);
+
+		public abstract Gtk.Allocation get_allocation();
+
+		public virtual Graphene.Rect get_allocation_rect() {
+			Gtk.Allocation alloc = this.get_allocation();
+			return Graphene.Rect().init(
+						(float) alloc.x,
+						(float) alloc.y,
+						(float) alloc.width,
+						(float) alloc.height
+					);
 		}
 
-		protected abstract void set_renderings( Rendering[] renderings );
-		protected abstract Rendering[] get_renderings();
-		public abstract string to_dot ();
-		public abstract string get_dot_id ();
+		public abstract void set_selected(bool val);
+		public abstract bool is_selected();
 
 	}
 
 
-
-
-
-
-
-
-
-
-
-
 }
-
-
-/*
-
-digraph {
-	graph [ margin="0.4,0.4" ];
-	node [ shape="box" margin="0,0"  ];
-	n0 [ id="n0" label="0.GtkLabel" width=3.93701 height=1.9685 ];
-	n1 [ id="n1" label="1.GtkButton" width=6.06299 height=1.9685 ];
-	n2 [ id="n2" label="2.GtkLabel" width=3.93701 height=1.9685 ];
-	n3 [ id="n3" label="3.GtkImage" width=3.93701 height=1.9685 ];
-	n4 [ id="n4" label="4.GtkButton" width=3.93701 height=1.9685 ];
-	n5 [ id="n5" label="5.GtkButton" width=3.93701 height=1.9685 ];
-	n2 -> n1 [id="e0" label="e0"  ];
-	n3 -> n1 [id="e1" label="e1"  ];
-	n1 -> n0 [id="e2" label="e2"  ];
-	n2 -> n0 [id="e3" label="e3"  ];
-	n3 -> n2 [id="e4" label="e4" penwidth=2 arrowsize=3.5 style=dotted ];
-	n4 -> n3 [id="e5" label="e5"  ];
-	n5 -> n3 [id="e6" label="e6"  ];
-
-n0
-	pos: "402.73,70.866"
-	height: "1.9685"
-	width: "3.937"
-	points: [[544.460,141.730],[261.000,141.730],[261.000,0.000],[544.460,0.000]]
-
-n3
-	pos: "291.73,655.81"
-	width: "3.937"
-	height: "1.9685"
-	points: [[433.460,726.680],[150.000,726.680],[150.000,584.950],[433.460,584.950]]
-
-
-
-
-		 * Executes graphviz cli and parse basic information for graph.
-		 *
-		 * This is used mainly to quickly gather graph information ( e.g bounding box )
-		 * without the need to parse nodes or edges.
-		 *
-		 * Parsing use graphviz json output (with xdot information) thus
-		 * expects cmd to contain "-Tjson" flag.
-
-		public bool compute_layout () {
-			Json.Object? jdot = null;
-			try {
-				var proc = new GLib.Subprocess.newv({
-									"dot",
-										"-Gdpi=%g".printf( this.get_dpi() ),
-										"-Tjson" },
-									GLib.SubprocessFlags.STDIN_PIPE | GLib.SubprocessFlags.STDOUT_PIPE );
-
-				GLib.Bytes stdout_buf = new GLib.Bytes(null);
-				GLib.Bytes stderr_buf = new GLib.Bytes(null);
-				string data = this.dot_serialize();
-				print("\n\n\n-----------------------------------------------------------------\n%s\n\n", data);
-				proc.communicate(
-					new GLib.Bytes(data.data ),
-					null,
-					out stdout_buf,
-					out stderr_buf );
-
-				if ( proc.get_exit_status () == 0 ) {
-					Json.Parser parser = new Json.Parser ();
-					print( (string) stdout_buf.get_data () );
-					parser.load_from_data ( (string) stdout_buf.get_data () );
-					Json.Node node = parser.get_root ();
-					jdot = node.get_object ();
-				} else {
-					warning("Error while parsing dot diagram (stdout, stderr): %s\n%s",
-						(string) stdout_buf.get_data (),
-						(string) stderr_buf.get_data ()
-					);
-				}
-			} catch ( GLib.Error e ) {
-				warning("Error while parsing dot diagram : %s", e.message);
-			}
-
-			if ( jdot == null) return false;
-
-			this.bb = jdot.get_string_member ("bb");
-			this.margin = jdot.get_string_member ("margin");
-
-			// Set margin for main GraphView widget
-			view.margin_top = (int) (dot_margin_y / 2);
-			view.margin_bottom = (int) (dot_margin_y / 2);
-			view.margin_start = (int) (dot_margin_x / 2);
-			view.margin_end = (int) (dot_margin_x / 2);
-
-
-
-
-			return true;
-		}
-		 */

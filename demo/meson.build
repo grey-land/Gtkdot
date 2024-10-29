@@ -11,5 +11,6 @@ gtkdot_sources += gnome.compile_resources('gtkdot-resources',
 executable('gtkdot', gtkdot_sources,
   dependencies: gtkdot_deps,
   link_with: gtkdot_lib,
+  include_directories: gtkdot_lib_inc,
   install: true,
 )

@@ -19,6 +19,7 @@ gtkdot_config = configure_file(
 	configuration: gtkdot_conf_data)
 
 gtkdot_sources = [
+	'utils.vala',
 	'graph.vala',
 	'layout.vala',
 	'widgets.vala',
