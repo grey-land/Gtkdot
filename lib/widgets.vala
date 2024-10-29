@@ -1,6 +1,129 @@
 namespace Gtkdot {
 
+	public class DotView : Gtk.Widget {
 
+		public string dot { get; set; }
+
+		protected Rendering[] renderings = {};
+
+		public DotView ( string ? dot = "" ) {
+			this.notify["dot"].connect(()=>{
+				this.queue_allocate();
+				this.queue_draw();
+			});
+			this.dot = dot;
+		}
+
+		public override void snapshot (Gtk.Snapshot snapshot) {
+			print("[snapshot]\n");
+			foreach ( var r in this.renderings ) {
+				r.render(snapshot, this.get_pango_context(), null, null);
+			}
+		}
+
+		public override void size_allocate (int width, int height, int baseline) {
+			print("[size_allocate]\n");
+			try {
+				// Execute graphviz including size flag
+				Json.Object obj = graphviz_exec( dot, {
+										"dot",
+											"-Gdpi=%g".printf(
+												(double) this.get_settings().gtk_xft_dpi / 1024),
+											"-Gsize=%g,%g".printf( to_inches( (double) width ), to_inches( (double) height ) ),
+											"-Tjson" });
+				print("Parsing : \n%s\n", dot);
+				// Parse graph renderings
+				Rendering[] _renderings = Rendering.xdot_parse( obj );
+
+				// Parse nodes
+				Json.Array? arr = obj.has_member("objects") ? obj.get_array_member ("objects") : null;
+				if ( arr != null ) {
+					for ( int i = 0; i < arr.get_length (); i ++ ) {
+						var _obj = arr.get_object_element ( i );
+						if ( _obj != null ) {
+							foreach ( var r in Rendering.xdot_parse( _obj ) ) {
+								// Fix text height
+								if ( r.contains_text() )
+									r.expand_text( this.get_pango_context(), true );
+								_renderings += r;
+							}
+						}
+					}
+					obj.remove_member ("objects");
+				}
+
+				// Parse edges
+				arr = obj.has_member("edges") ? obj.get_array_member ("edges") : null;
+				if ( arr != null ) {
+					for ( int i = 0; i < arr.get_length (); i ++ ) {
+						var _obj = arr.get_object_element ( i );
+						if ( _obj != null ) {
+							foreach ( var r in Rendering.xdot_parse( _obj ) ) {
+								_renderings += r;
+								print("[%d] %s\n", (int) _renderings.length, r.x_dot );
+							}
+						}
+					}
+					obj.remove_member ("edges");
+				}
+
+				// Expand text renderings
+				foreach ( var r in _renderings ) {
+					if ( r.contains_text() )
+						r.expand_text( this.get_pango_context() );
+				}
+
+				this.renderings = _renderings;
+
+			} catch ( GLib.Error e ) {
+				warning ( "Error while parsing dot diagram : %s", e.message );
+				base.size_allocate( width, height, baseline );
+			}
+
+		}
+
+		public override void measure (Gtk.Orientation orientation,
+									int for_size,
+									out int minimum,
+									out int natural,
+									out int minimum_baseline,
+									out int natural_baseline) {
+			print("[measure]\n");
+			try {
+				// we use -Tjson0 instead of -Tjson as we only need bb,margin attributes
+				// for measuring the main graph widget.
+				Json.Object obj = graphviz_exec( dot, {
+										"dot",
+											"-Gdpi=%g".printf(
+												(double) this.get_settings().gtk_xft_dpi / 1024 ),
+											"-Tjson0" });
+
+				string bb = obj.get_string_member ("bb");
+
+				if ( orientation == Gtk.Orientation.HORIZONTAL )
+					//  Width computed from graphviz
+					minimum = natural = bb != null && bb.split(",").length == 4
+						? (int) ( double.parse(bb.split(",")[2])  )
+						: 0;
+				else
+					// Height computed from graphviz
+					minimum = natural = bb != null && bb.split(",").length == 4
+						? (int) ( double.parse( bb.split(",")[3])  )
+						: 0;
+				minimum_baseline = natural_baseline= -1;
+
+			} catch ( GLib.Error e ) {
+				warning ( "Error while parsing dot diagram : %s", e.message );
+				base.measure( orientation, for_size,
+					out minimum, out natural, out minimum_baseline, out natural_baseline );
+			}
+		}
+
+		public override Gtk.SizeRequestMode get_request_mode () {
+			return Gtk.SizeRequestMode.CONSTANT_SIZE;
+		}
+
+	}
 
 	public class GraphView : Gtk.Widget {
 

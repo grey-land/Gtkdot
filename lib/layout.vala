@@ -191,15 +191,9 @@ namespace Gtkdot {
 			return Gtk.SizeRequestMode.CONSTANT_SIZE;
 		}
 
-		double to_inches( double val ) {
-			return val / 25.4 / 3;
-		}
-
 		/*
 
-		double from_inches( double val ) {
-			return val * 25.4 * 3;
-		}
+
 
 		protected void parse_margin(Gtk.Widget widget, string margin) {
 			double margin_x = 0;

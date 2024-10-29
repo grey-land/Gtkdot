@@ -9,6 +9,14 @@ namespace Gtkdot {
 		CLI_ERROR
 	}
 
+	double to_inches( double val ) {
+		return val / 25.4 / 3;
+	}
+
+	/* double from_inches( double val ) {
+		return val * 25.4 * 3;
+	} */
+
 	/**
 	 * Build ellipse from rectangle
 	 *

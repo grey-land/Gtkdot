@@ -117,21 +117,25 @@ namespace Gtkdot {
 			ret.set_alignment(this.text_align);
 			ret.set_width( (int) this.text_width );
 			ret.set_text( this.text_data, -1 );
+			ret.set_justify(true);
+			ret.set_single_paragraph_mode(true);
 			return ret;
 		}
 
 		/*** Calculate text bounding path (pos + size) */
-		public void expand_text ( Pango.Context ctx ) {
+		public void expand_text ( Pango.Context ctx, bool fix_height = false ) {
 			// Set text position
 			Pango.Layout pl = this.get_pango_layout(ctx);
 			int tw=0;
 			int th=0;
 			// pl.get_size(out tw, out th);
 			pl.get_pixel_size(out tw, out th);
+			if ( fix_height )
+				this.offset.y -= (float) th / 2;
 			Gsk.PathBuilder pb = new Gsk.PathBuilder();
 			pb.add_rect(
 				Graphene.Rect().init(
-						this.offset.x - ( (float) tw / 2),
+						this.offset.x,
 						this.offset.y,
 						(float) tw,
 						(float) th ) );
@@ -210,13 +214,14 @@ namespace Gtkdot {
 
 							case "E": // Filled ellipse
 							case "e": // Unfilled ellipse
+								var _points = graphviz_op.get_array_member("rect");
 								shape.set_path(
 									build_ellipse(
 										Graphene.Rect().init(
-											(float) arr.get_double_element (0),
-											(float) arr.get_double_element (1),
-											(float) arr.get_double_element (2),
-											(float) arr.get_double_element (3)
+											(float) _points.get_double_element (0),
+											(float) _points.get_double_element (1),
+											(float) _points.get_double_element (2),
+											(float) _points.get_double_element (3)
 										)
 									),
 									// fill eclipse if operation is capital E
