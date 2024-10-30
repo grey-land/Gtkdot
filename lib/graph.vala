@@ -1,364 +1,198 @@
 
 namespace Gtkdot {
 
-	/**
-	 * Rendering class converts Graphviz xdot information to Gtk.
-	 *
-	 * Graphviz xdot is an extension to dot format providing additional
-	 * information on how to render a graph. It provides following
-	 * additional ''drawing attributes'' see [[https://graphviz.org/docs/outputs/canon/#xdot|docs]]
-	 *
-	 * * `_draw_` Renders basic shape
-	 * * `_ldraw_` Render text label
-	 * * `_hdraw_` Render head arrow
-	 * * `_tdraw_` Render tail arrow
-	 * * `_hldraw_` Render head arrow label
-	 * * `_tldraw_` Render tail arrow label
-	 *
-	 * Each of those elements contain and array of operations such as
-	 * //set color//, //set font//, //set style//, //set path//, and others.
-	 * Combining those operations will result in rendering either a shape or text.
-	 *
-	 * Rendering class parses the operations and prepares all parts ( paths, colors, styles,
-	 * pango layouts, ... ) to be able to display the corresponding ''drawing attribute''
-	 * to Gtk. Each Rendering class object corresponds to a single ''drawing attribute'',
-	 * and displays either a shape or text.
-	 *
-	 * Use `xdot_parse` static function to parse ''drawing attributes'' and
-	 * build list of Rendering class objects. To display the object, use
-	 * `render`. Additionally `contains` may be used to detect whether a
-	 * point ( such as mouse pointer position ) is within object's bounds.
-	 *
-	 */
-	protected class Rendering {
+	public class Graph : Gtk.Widget {
 
-		/*** the actual ''drawing attribute'' `this` corresponds to */
-		public string x_dot;
-
-		/*** Color to use for stroke */
-		public Gdk.RGBA pen_color;
-
-		/*** Color to use for fill */
-		public Gdk.RGBA fill_color;
-
-		public Gsk.Path path;
-		public Graphene.Point offset;
-
-		// Text related
-		public string text_face = "Sans";
-		public Pango.Alignment text_align;
-		public double text_size = 14;
-		public double text_width = 0;
-		public string text_data = "";
-
-		public bool contains_text() {
-			return x_dot == "_ldraw_"   // text label
-				|| x_dot == "_hldraw_"  // head arrow label
-				|| x_dot == "_tldraw_"; // tail arrow label
+		public string title { get; set; default = ""; }
+		public GraphLayout layout {
+			get { return layout_manager as GraphLayout; }
 		}
 
-		// Shape related
-		private Gsk.FillRule fill_rule;
-		// private Gsk.Path path;
-		private bool fill;
-		private Gsk.Stroke stroke;
+		private Graphene.Rect selection = {};
+		private Gtk.GestureClick gc;
+		private Gtk.EventControllerMotion cm;
+		private ulong pressed_sig = -1;
+		private ulong motion_sig  = -1;
+		private ulong release_sig = -1;
 
-		public Rendering() {
-			this.pen_color = { 0.1f, 0.1f, 0.1f, 1 };
-			this.fill_color = { 0.8f, 0.8f, 0.8f, 1 };
-			this.fill_rule = Gsk.FillRule.EVEN_ODD;
+		public Gdk.RGBA bg_color = { 1, 1, 1, 1 };
+		public Gdk.RGBA border_color = { 0, 0, 0, 1 };
+		public Gdk.RGBA selection_color = { 1, 0, 0, 1 };
+		public Gdk.RGBA selection_fill_color = { 1, 0, 0, 0.1f };
+
+		public Gsk.Shadow shadow = {
+				{ 0.5f, 0.5f, 0.5f, 1 },
+				1, 1, 1
+			};
+		public Gsk.Stroke stroke;
+
+		construct {
+			// set layout manager
+			this.set_layout_manager( new GraphLayout () );
+			this.layout.set_defaults();
+
+			this.cm = new Gtk.EventControllerMotion();
+			this.gc = new Gtk.GestureClick();
+			this.gc.set_propagation_phase ( Gtk.PropagationPhase.TARGET   );
+			this.cm.set_propagation_phase ( Gtk.PropagationPhase.TARGET   );
+			this.add_controller( this.gc );
+			this.add_controller( this.cm );
+
 			this.stroke = new Gsk.Stroke(1);
+			this.bg_color.parse("#dddddd");
+
+			/*
+			this.border_color.parse("#6F4E37");
+			this.shadow.color.parse("#9d8b7c");
+			this.selection_color.parse("#cb4335");
+			this.bg_color.parse("#d5d0cc");
 			this.stroke.set_line_cap( Gsk.LineCap.ROUND );
 			this.stroke.set_line_join( Gsk.LineJoin.ROUND );
-			this.offset = Graphene.Point(). init (0, 0);
+			*/
+			// this.enable_selection();
 		}
 
-		public void set_path ( Gsk.Path path, bool fill = false ) {
-			this.path = path;
-			this.fill = fill;
+		public void add_node( Gtk.Widget child ) {
+			child.set_parent(this);
+			this.layout.get_node(child);
 		}
 
-		public void set_style ( string style ) {
-			// set line width
-			if ( style.has_prefix("setlinewidth") )
-				this.stroke.set_line_width (
-					int.max(1, int.parse ( style.replace("setlinewidth(", "").replace(")", "") ) )
-				);
-			// set dotted style
-			else if ( style == "dotted" )
-				this.stroke.set_dash({ this.stroke.get_line_width () * 4 });
+		public void add_edge( Gtk.Widget from, Gtk.Widget to ) {
+			this.layout.add_edge(from, to);
 		}
 
-
-		/**
-		 * Check whether point contained in rendering.
-		 *
-		 * For Rendering object that holds texts it checks against text bounds.
-		 * For Rendering object that holds a shape, and shape is a closed path
-		 * checks against the shape. If shape is not a closed path then returns
-		 * false.
-		 *
-		 * @param point Point to check whether contained or not.
-		 * @return `true` if point is contained `false` otherwise.
-		 */
-		public bool contains ( Graphene.Point point ) {
-			if ( this.path.is_closed() )
-				return this.path.in_fill( point, fill_rule);
-			return false;
+		protected override void dispose () {
+			var child = this.get_first_child ();
+			while (child != null) {
+				child.unparent ();
+				child = this.get_first_child ();
+			}
+			base.dispose ();
 		}
 
-		/*** Pango layout contains all text related information to draw text labels */
-		public Pango.Layout get_pango_layout ( Pango.Context ctx ) {
-			Pango.Layout ret = new Pango.Layout(ctx);
-			ret.set_wrap( Pango.WrapMode.WORD );
-			Pango.FontDescription font = Pango.FontDescription.from_string(this.text_face);
-			font.set_absolute_size( this.text_size * Pango.SCALE );
-			ret.set_font_description ( font );
-			ret.set_alignment(this.text_align);
-			ret.set_width( (int) this.text_width );
-			ret.set_text( this.text_data, -1 );
-			ret.set_justify(true);
-			ret.set_single_paragraph_mode(true);
-			return ret;
-		}
+		public override void snapshot( Gtk.Snapshot snapshot ) {
 
-		/*** Calculate text bounding path (pos + size) */
-		public void expand_text ( Pango.Context ctx, bool fix_height = false ) {
-			// Set text position
-			Pango.Layout pl = this.get_pango_layout(ctx);
-			int tw=0;
-			int th=0;
-			// pl.get_size(out tw, out th);
-			pl.get_pixel_size(out tw, out th);
-			if ( fix_height )
-				this.offset.y -= (float) th / 2;
-			Gsk.PathBuilder pb = new Gsk.PathBuilder();
-			pb.add_rect(
+			info("Graph Snapshot requested \n");
+
+			// Apply background
+			snapshot.append_color(this.bg_color,
 				Graphene.Rect().init(
-						this.offset.x,
-						this.offset.y,
-						(float) tw,
-						(float) th ) );
-			pb.close();
-			this.path = pb.to_path();
-		}
+					//  0
+					  - this.margin_start
+					// , 0
+					, - this.margin_top
+					, this.get_width()  + this.margin_start + this.margin_end
+					, this.get_height() + this.margin_top + this.margin_bottom
+				)
+			);
 
-		public void render (Gtk.Snapshot snapshot, Pango.Context ctx,
-							Gdk.RGBA? custom_pen_color = null,
-							Gdk.RGBA? custom_fill_color = null ) {
-			snapshot.save();
-			snapshot.translate(this.offset);
+			// Loop through members and draw edges and widget borders
+			layout.foreach_member( ( member ) => {
 
-			if ( this.contains_text() ) {
+				if ( member.is_visible() ) {
+					bool selected = member.is_selected();
 
-				snapshot.append_layout(
-						this.get_pango_layout(ctx),
-						custom_pen_color == null ? this.pen_color : custom_pen_color );
-			} else {
+					// process selection
+					if ( ! selected && this.selection_is_active() )
+						selected = member.contains_selection(selection);
 
-				if ( this.fill )
-					snapshot.append_fill ( this.path, this.fill_rule,
-								custom_fill_color == null ? this.fill_color : custom_fill_color );
-
-				snapshot.append_stroke ( this.path, this.stroke,
-								custom_pen_color == null ? this.pen_color : custom_pen_color);
-			}
-			snapshot.restore();
-		}
-
-		public static Rendering[] xdot_parse(
-								Json.Object obj,
-								string [] members = {
-												"_draw_",
-												"_ldraw_",
-												"_hdraw_", "_tdraw_", "_hldraw_", "_tldraw_" // edge drawing
-												}) {
-			Rendering[] ret = {};
-
-			foreach ( string member in members ) {
-
-				if ( obj.has_member(member) ) {
-					var arr = obj.get_array_member(member);
-					assert_nonnull ( arr );
-
-					Rendering? shape = null;
-
-					arr.foreach_element( (a, i, node) =>{
-
-						var graphviz_op = node.get_object();
-						assert_nonnull ( graphviz_op );
-
-						if ( shape == null ) {
-							shape = new Rendering();
-							shape.x_dot = member;
-						}
-
-						// Process operation
-						string op = graphviz_op.get_string_member("op");
-
-						switch ( op ) {
-
-							case "C": // Set fill color
-								// gradient colors are not yet supported
-								if ( graphviz_op.get_string_member("grad") == "none" )
-									shape.fill_color.parse( graphviz_op.get_string_member("color") );
-								break;
-							case "c": // Set pen color
-								// gradient colors are not yet supported
-								if ( graphviz_op.get_string_member("grad") == "none" )
-									shape.pen_color.parse( graphviz_op.get_string_member("color") );
-								break;
-							case "S": // Set style attribute
-								shape.set_style( graphviz_op.get_string_member("style") );
-								break;
-
-							case "E": // Filled ellipse
-							case "e": // Unfilled ellipse
-								var _points = graphviz_op.get_array_member("rect");
-								shape.set_path(
-									build_ellipse(
-										Graphene.Rect().init(
-											(float) _points.get_double_element (0),
-											(float) _points.get_double_element (1),
-											(float) _points.get_double_element (2),
-											(float) _points.get_double_element (3)
-										)
-									),
-									// fill eclipse if operation is capital E
-									op == "E"
-								);
-								ret += shape;
-								shape = null;
-								break;
-
-							case "P": // Filled polygon
-							case "p": // Unfilled polygon
-							case "L": // Polyline
-								shape.set_path(
-									build_poly(
-										parse_points( graphviz_op.get_array_member("points") ),
-										// Close shape only for polygon types
-										( op == "P" || op == "p" )
-									),
-									// fill polygon if operation is capital P
-									op == "P"
-								);
-								ret += shape;
-								shape = null;
-								break;
-
-							case "B": // B-spline
-							case "b": // Filled B-spline
-								shape.set_path(
-									build_bspline(
-										parse_points( graphviz_op.get_array_member("points") ),
-										// close b-spine curves only when they expect to be
-										// filled
-										// op == "B"
-										false
-									),
-									// fill b-spine if operation is capital B
-									op == "B"
-								);
-								ret += shape;
-								shape = null;
-								break;
-
-							case "t": // Set font characteristics
-								break;
-							case "F": // Set font
-								shape.text_face = graphviz_op.get_string_member("face");
-								shape.text_size = graphviz_op.get_double_member("size");
-								break;
-							case "T": // Set text
-								var pos = graphviz_op.get_array_member("pt");
-								shape.offset = Graphene.Point(). init (
-									(float) pos.get_double_element (0),
-									(float) pos.get_double_element (1) );
-								switch (  graphviz_op.get_string_member("align") ) {
-									case "c":
-										shape.text_align = Pango.Alignment.CENTER;
-										break;
-									// ....
-									default:
-										shape.text_align = Pango.Alignment.LEFT;
-										break;
-								}
-								shape.text_width = (int) graphviz_op.get_double_member("width");
-								shape.text_data = graphviz_op.get_string_member("text");
-								ret += shape;
-								shape = null;
-								break;
-
-							case "I": // Externally-specified image drawn in the box
-							default:
-								break;
-						}
-					});
+					member.snapshot( snapshot, this.get_pango_context(),
+								this.stroke, this.shadow, selected
+									? this.selection_color
+									: this.border_color );
 				}
-			}
-			return ret;
+				return false;
+			});
+
+			// if selection is active fill selection rectangle
+			if ( this.selection_is_active() )
+				snapshot.append_color(this.selection_fill_color, this.selection);
+
+			// draw actual widgets
+			base.snapshot(snapshot);
+
+			// if selection is active stroke selection rectangle
+			if ( this.selection_is_active() )
+				snapshot.append_border(
+					Gsk.RoundedRect().init_from_rect (this.selection, 0),
+					{ stroke.get_line_width(),
+						stroke.get_line_width(),
+						stroke.get_line_width(),
+						stroke.get_line_width() },
+					{ this.selection_color,
+						this.selection_color,
+						this.selection_color,
+						this.selection_color });
+		}
+
+
+		/*** Check whether selection is currently active */
+		public bool selection_is_active () {
+			return ! this.selection.equal( Graphene.Rect.zero() ) ;
+		}
+
+		/*** Check whether selection is enabled */
+		public bool selection_is_enabled() {
+			return pressed_sig != -1;
+		}
+
+		/*** Enable selection */
+		public void enable_selection() {
+			this.pressed_sig = this.gc.pressed.connect( selection_click_callback );
+		}
+
+		/*** Disable selection */
+		public void disable_selection() {
+			this.gc.disconnect(pressed_sig);
+			this.pressed_sig = -1;
+		}
+
+		public signal void selection_started () {}
+		public signal void selection_finished () {
+			// disconnect motion/release signal handlers
+			this.gc.disconnect( this.release_sig );
+			this.cm.disconnect( this.motion_sig );
+		}
+
+		private void selection_click_callback (int n_press, double x, double y) {
+
+			// clear selection
+			this.selection = Graphene.Rect.zero ();
+
+			// assign selection origin from mouse position
+			this.selection.origin = Graphene.Point().init( (float) x, (float) y );
+
+			// On mouse move, update selection rectangle
+			// and request to re-render widget for selection
+			// to render selected nodes
+			this.motion_sig = this.cm.motion.connect( ( _x, _y )=>{
+				this.selection.size = Graphene.Size().init(
+										(float) _x - this.selection.origin.x ,
+										(float) _y - this.selection.origin.y );
+				this.queue_draw();
+			});
+
+			// signal that selection started
+			this.selection_started();
+
+			// On mouse release
+			this.release_sig = this.gc.released.connect ( (_n, _x, _y) => {
+
+				// set selection flag on nodes/edges
+				this.layout.apply_selection( this.selection );
+
+				// clear selection
+				this.selection = Graphene.Rect.zero ();
+
+				// signal that selection finished - will request redraw
+				this.selection_finished();
+
+				this.queue_draw();
+
+			});
+
 		}
 
 	}
-
-	public enum GraphMemberKind {
-		NODE,
-		EDGE;
-
-		public string to_string() {
-			switch (this) {
-				case NODE:
-					return "Graph Node";
-				case EDGE:
-					return "Graph Edge";
-				default:
-					assert_not_reached();
-			}
-		}
-
-	}
-
-	public interface IGraphMember : GLib.Object {
-
-		public virtual void render(Gtk.Snapshot snapshot, Pango.Context ctx) {
-			foreach ( var rendering in this.get_renderings() )
-				rendering.render(snapshot, ctx);
-		}
-
-		public virtual bool contains (Graphene.Point point) {
-			foreach ( var rendering in this.get_renderings() ) {
-				if ( rendering.contains(point) )
-					return true;
-			}
-			return false;
-		}
-
-		public abstract GraphMemberKind get_kind ();
-
-		public virtual string get_label() {
-			return "";
-		}
-
-		public abstract Rendering[] get_renderings();
-		public abstract void set_renderings( Rendering[] val);
-
-		public abstract Gtk.Allocation get_allocation();
-
-		public virtual Graphene.Rect get_allocation_rect() {
-			Gtk.Allocation alloc = this.get_allocation();
-			return Graphene.Rect().init(
-						(float) alloc.x,
-						(float) alloc.y,
-						(float) alloc.width,
-						(float) alloc.height
-					);
-		}
-
-		public abstract void set_selected(bool val);
-		public abstract bool is_selected();
-
-	}
-
 
 }

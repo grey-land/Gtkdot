@@ -2,6 +2,5 @@
 <gresources>
   <gresource prefix="/io/gitlab/vgmkr/dot">
     <file preprocess="xml-stripblanks">ui/graph.ui</file>
-    <file preprocess="xml-stripblanks">ui/dot.ui</file>
   </gresource>
 </gresources>

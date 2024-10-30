@@ -13,9 +13,35 @@ namespace Gtkdot {
 		return val / 25.4 / 3;
 	}
 
-	/* double from_inches( double val ) {
+	double from_inches( double val ) {
 		return val * 25.4 * 3;
-	} */
+	}
+
+	public delegate bool DelegateMember ( GvcGraphMember member );
+
+	public enum GvcGraphMemberKind {
+		  NODE
+		, EDGE
+		// , SUBGRAPH Not implemented
+		;
+	}
+
+	public static Graphene.Point[] parse_xdot_points ( string[] parts, ref int i ) {
+		Graphene.Point[] points = {};
+		// number of points
+		int n_points = int.parse( parts[i] );
+		i++;
+		while ( n_points != 0 ) {
+			Graphene.Point _p = Graphene.Point().init(
+				(float) double.parse( parts[ i ] ),
+				(float) double.parse( parts[ i + 1] )
+			);
+			points += _p;
+			n_points -= 1;
+			i += 2;
+		}
+		return points;
+	}
 
 	/**
 	 * Build ellipse from rectangle
@@ -117,7 +143,7 @@ namespace Gtkdot {
 	 *
 	 * @param arr Array of points already parsed.
 	 * @return List of points.
-	 */
+	 *
 	public static Graphene.Point[] parse_points( Json.Array arr ) {
 		Graphene.Point[] ret = {};
 		for ( int i = 0; i < arr.get_length(); i ++ ) {
@@ -128,12 +154,11 @@ namespace Gtkdot {
 		return ret;
 	}
 
-
 	/**
 	 * Pipes provided dot diagram to graphviz cli and returns json object.
 	 *
 	 * It expects cmd to contain "-Tjson" flag.
-	 */
+	 *
 	public Json.Object graphviz_exec ( string dot, string[] cmd = { "dot", "-Tjson" } ) throws GLib.Error {
 		debug( "Parsing dot diagram :\n%s", dot );
 		var proc = new GLib.Subprocess.newv(cmd,
@@ -155,5 +180,7 @@ namespace Gtkdot {
 		Json.Node node = parser.get_root ();
 		return node.get_object ();
 	}
+	 */
 
 }
+

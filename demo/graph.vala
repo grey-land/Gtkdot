@@ -18,12 +18,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-
 [GtkTemplate (ui = "/io/gitlab/vgmkr/dot/ui/graph.ui")]
-public class Gtkdot.Window : Gtk.ApplicationWindow {
+public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
-	[GtkChild]
-	private unowned Gtkdot.GraphView view;
+	[GtkChild] private unowned Gtkdot.Graph view;
+	[GtkChild] private unowned Gtk.Label na;
+	[GtkChild] private unowned Gtk.Button nb;
+	[GtkChild] private unowned Gtk.Image i1;
 
 	private string[] icons = {
 			"dialog-password-symbolic",
@@ -36,158 +37,122 @@ public class Gtkdot.Window : Gtk.ApplicationWindow {
 			"weather-showers-symbolic"
 		};
 
-	public Window (Gtk.Application app) {
+	public GraphWindow (Gtk.Application app) {
 		Object (application: app);
 
-		view.border_color.parse("#6F4E37");
-		view.shadow.color.parse("#9d8b7c");
+		this.view.layout.set_attribute("rankdir", "LR");
+		this.view.layout.set_attribute("margin", "0.2");
+		this.view.enable_selection();
 
-		view.enable_selection();
-		view.selection_color.parse("#cb4335");
+		this.view.border_color.parse("#6F4E37");
+		this.view.shadow.color.parse("#9d8b7c");
+		this.view.selection_color.parse("#cb4335");
+		this.view.bg_color.parse("#d5d0cc");
 
-		view.margin_top    = 20;
-		view.margin_bottom = 20;
-		view.margin_start  = 20;
-		view.margin_end    = 20;
-		// this.generate_widgets(120, 220);
-		this.generate_widgets(5, 5);
-		// this.generate_widgets(10, 10);
+		this.view.add_edge (na, nb);
+		this.view.add_edge (na, i1);
+		this.view.add_edge (nb, i1);
+
+		this.generate_widgets(10, 10);
 	}
 
-	[GtkCallback]
-	private void debug (Gtk.Widget btn) {
-		view.layout.nodes.@foreach( (k, v) => {
-			Node node = v;
-			print("Node %d:%d\n", (int) k, (int) node.id );
-		});
-		print("\n");
+	private void generate_widgets(int n_nodes, int n_edges) {
+		Gtk.Button[] nodes = {};
+		Gtk.Button widget;
 
-		for ( int i = 0; i < view.layout.edges.length(); i ++ ) {
-			Edge e = view.layout.edges.nth_data(i);
-			print("Edge %d -> %d\n", (int) e.start, (int) e.end );
-		}
-
-	}
-
-	[GtkCallback]
-	private void remove_selected (Gtk.Widget btn) {
-		view.remove_selected();
-	}
-
-	[GtkCallback]
-	private void btn_clicked (Gtk.Widget btn) {
-
-		Gtk.Button new_btn = new Gtk.Button.from_icon_name (
-						icons[ GLib.Random.int_range(0, icons.length) ]);
-		new_btn.clicked.connect(this.btn_clicked);
-
-		uint current = view.get_member_id_for_widget( btn );
-		print( "Clicked => %d\n", (int) current );
-
-		uint n = view.add_node(new_btn);
-		print( "Added node => %d\n", (int) n );
-
-		uint	 e = view.add_edge( current, n );
-		print( "Added edge => %d\n", (int) e );
-
-	}
-
-	private void generate_widgets( int nodes, int edges ) {
-
-		uint[] wids = {};
-
-		for ( int i = 0; i < nodes; i++ ) {
-			Gtk.Button widget;
-
-			if ( i % 2 == 0 ) {
+		for ( int i = 0; i < n_nodes; i ++ ) {
+			if ( i % 2 == 0 )
 				widget = new Gtk.Button.from_icon_name (
-								icons[ GLib.Random.int_range(0, icons.length) ] );
-			} else {
+						icons[ GLib.Random.int_range(0, icons.length) ] );
+			else
 				widget = new Gtk.Button.with_label("%d button".printf(i));
-			}
 
-			widget.clicked.connect(this.btn_clicked);
+			if ( i % 2 == 0 )
+				widget.clicked.connect(this.btn_clicked);
+			else
+				widget.clicked.connect( (b)=>{
+					b.visible = false;
+				});
+
+			int margin = ( i % 3 == 0 )
+				? int.max( 0, GLib.Random.int_range(10, 30) )
+				: 0;
+			widget.margin_top    = margin;
+			widget.margin_bottom = margin;
+			widget.margin_start  = margin;
+			widget.margin_end    = margin;
 
 			int size = int.max( 50, GLib.Random.int_range(50, 150) );
 			widget.set_size_request(size, size);
-			if ( i % 3 == 0 ) {
-				int margin = int.max( 0, GLib.Random.int_range(10, 30) );
-				widget.margin_top    = margin;
-				widget.margin_bottom = margin;
-				widget.margin_start  = margin;
-				widget.margin_end    = margin;
-			}
-			/*
-			*/
 
-			// wids += view.add_node( widget, "color=\"slateblue\"" );
-			wids += view.add_node( widget
-								, "color=\"#ada9a5\""
-								);
 
+			this.view.add_node( widget );
+			nodes += widget;
 
 		}
 
-		for ( int i = 0; i < edges; i++ ) {
-
-			view.add_edge(
-				wids [ (int) GLib.Random.int_range(0, nodes) ],
-				wids [ (int) GLib.Random.int_range(0, nodes) ]
-				// , " fontcolor=\"slateblue\" color=\"slateblue\" "
-				, "fontcolor=\"#ada9a5\" color=\"#ada9a5\""
+		for ( int i = 0; i < n_edges; i ++ ) {
+			this.view.add_edge(
+				nodes [ (int) GLib.Random.int_range(0, n_nodes) ],
+				nodes [ (int) GLib.Random.int_range(0, n_nodes) ]
 			);
 		}
 
-		// foreach
 	}
+
+
+	[GtkCallback]
+	private void remove_selected (Gtk.Widget btn) {
+		print("remove_selected\n");
+		this.view.layout.remove_selected();
+		this.view.queue_draw();
+	}
+
+	private void btn_clicked (Gtk.Widget btn) {
+		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
+		new_btn.clicked.connect(this.btn_clicked);
+		this.view.add_node( new_btn );
+		this.view.add_edge( btn, new_btn );
+	}
+
 }
 
 public class Gtkdot.Application : Gtk.Application {
-    public Application () {
-        Object (
-            application_id: "io.gitlab.vgmkr.dot.graphdemo",
-            flags: ApplicationFlags.DEFAULT_FLAGS
-        );
-    }
 
-    construct {
-        ActionEntry[] action_entries = {
-            { "about", this.on_about_action },
-            { "preferences", this.on_preferences_action },
-            { "quit", this.quit }
-        };
-        this.add_action_entries (action_entries, this);
-        this.set_accels_for_action ("app.quit", {"<primary>q"});
-    }
+	public Application () {
+		Object (
+			application_id: "io.gitlab.vgmkr.dot",
+			flags: ApplicationFlags.DEFAULT_FLAGS
+		);
+	}
 
-    public override void activate () {
-        base.activate ();
-        var win = this.active_window ?? new Gtkdot.Window (this);
-        win.present ();
-    }
+	construct {
+		ActionEntry[] action_entries = {
+			{ "quit", this.quit }
+		};
+		this.add_action_entries (action_entries, this);
+		this.set_accels_for_action ("app.quit", {"<primary>q"});
+	}
 
-    private void on_about_action () {
-        string[] authors = { "Unknown" };
-        Gtk.show_about_dialog (
-            this.active_window,
-           "program-name", "gtkdot",
-           "logo-icon-name", "io.gitlab.vgmkr.dot",
-           "authors", authors,
-           "translator-credits", _("translator-credits"),
-           "version", "0.1.0",
-           "copyright", "© 2024 Unknown"
-       );
-    }
+	public override void activate () {
 
-    private void on_preferences_action () {
-        message ("app.preferences action activated");
-    }
+		// Initialize Widgets so that UI can find the classes
+		typeof ( Gtkdot.Graph );
+
+		base.activate ();
+
+		var win = this.active_window;
+		if (win == null) {
+			win = new Gtkdot.GraphWindow (this);
+		}
+		win.present ();
+
+	}
+
 }
 
 int main (string[] args) {
-    // Intl.bindtextdomain (Config.GETTEXT_PACKAGE, Config.LOCALEDIR);
-    // Intl.bind_textdomain_codeset (Config.GETTEXT_PACKAGE, "UTF-8");
-    // Intl.textdomain (Config.GETTEXT_PACKAGE);
-    var app = new Gtkdot.Application ();
-    return app.run (args);
+	var app = new Gtkdot.Application ();
+	return app.run (args);
 }
+
