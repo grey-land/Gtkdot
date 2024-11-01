@@ -26,6 +26,10 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 	[GtkChild] private unowned Gtk.Button nb;
 	[GtkChild] private unowned Gtk.Image i1;
 
+
+	private int initial_h = -1;
+	private int initial_w = -1;
+
 	private string[] icons = {
 			"dialog-password-symbolic",
 			"non-starred-symbolic",
@@ -39,24 +43,52 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
 	public GraphWindow (Gtk.Application app) {
 		Object (application: app);
-
-		this.view.layout.set_attribute("rankdir", "LR");
-		this.view.layout.set_attribute("margin", "0.2");
 		this.view.enable_selection();
-
+		this.view.realize.connect( ()=>{
+			this.scale_adj.value = 100;
+			this.on_scale();
+			});
+		this.view.layout.set_attribute("rankdir", "BT");
+		/*
+		this.view.layout.set_attribute("fontsize", "8");
+		this.view.layout.set_attribute("margin", "0.4");
+		this.view.layout.set_attribute("pad", "0.4");
+		*/
 		this.view.border_color.parse("#6F4E37");
+		this.view.border_color.alpha = 0.5f;
 		this.view.shadow.color.parse("#9d8b7c");
 		this.view.selection_color.parse("#cb4335");
 		this.view.bg_color.parse("#d5d0cc");
-
-		this.view.add_edge (na, nb);
-		this.view.add_edge (na, i1);
-		this.view.add_edge (nb, i1);
-
-		this.generate_widgets(10, 10);
 	}
 
-	private void generate_widgets(int n_nodes, int n_edges) {
+	[GtkChild] private unowned Gtk.Adjustment scale_adj;
+	[GtkCallback] private void on_scale() {
+		this.view.layout.scale_factor = scale_adj.value / 100;
+		this.view.queue_resize ();
+	}
+
+	[GtkCallback]
+	private void pic_clicked (Gtk.Widget btn) {
+		i1.paintable = this.view.layout.get_dot_picture();
+	}
+
+	[GtkCallback]
+	private void remove_selected (Gtk.Widget btn) {
+		print("remove_selected\n");
+		this.view.layout.remove_selected();
+		this.view.queue_draw();
+	}
+
+	[GtkCallback]
+	private void generate_click (Gtk.Widget btn) {
+		print("generate_click\n");
+		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
+		new_btn.clicked.connect(this.generate_click);
+		this.view.add_node( new_btn );
+		this.view.add_edge( btn, new_btn );
+	}
+
+	public void generate_widgets(int n_nodes, int n_edges) {
 		Gtk.Button[] nodes = {};
 		Gtk.Button widget;
 
@@ -65,22 +97,24 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 				widget = new Gtk.Button.from_icon_name (
 						icons[ GLib.Random.int_range(0, icons.length) ] );
 			else
-				widget = new Gtk.Button.with_label("%d button".printf(i));
+				widget = new Gtk.Button.with_label("%d".printf(i));
 
 			if ( i % 2 == 0 )
-				widget.clicked.connect(this.btn_clicked);
+				widget.clicked.connect(this.generate_click);
 			else
 				widget.clicked.connect( (b)=>{
 					b.visible = false;
 				});
 
+
 			int margin = ( i % 3 == 0 )
-				? int.max( 0, GLib.Random.int_range(10, 30) )
+				? int.max( 0, GLib.Random.int_range(1, 8) )
 				: 0;
 			widget.margin_top    = margin;
 			widget.margin_bottom = margin;
 			widget.margin_start  = margin;
 			widget.margin_end    = margin;
+			// widget.halign = Gtk.Align.CENTER;
 
 			int size = int.max( 50, GLib.Random.int_range(50, 150) );
 			widget.set_size_request(size, size);
@@ -101,19 +135,6 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 	}
 
 
-	[GtkCallback]
-	private void remove_selected (Gtk.Widget btn) {
-		print("remove_selected\n");
-		this.view.layout.remove_selected();
-		this.view.queue_draw();
-	}
-
-	private void btn_clicked (Gtk.Widget btn) {
-		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
-		new_btn.clicked.connect(this.btn_clicked);
-		this.view.add_node( new_btn );
-		this.view.add_edge( btn, new_btn );
-	}
 
 }
 
@@ -122,7 +143,7 @@ public class Gtkdot.Application : Gtk.Application {
 	public Application () {
 		Object (
 			application_id: "io.gitlab.vgmkr.dot",
-			flags: ApplicationFlags.DEFAULT_FLAGS
+			flags: ApplicationFlags.HANDLES_COMMAND_LINE
 		);
 	}
 
@@ -133,6 +154,33 @@ public class Gtkdot.Application : Gtk.Application {
 		this.add_action_entries (action_entries, this);
 		this.set_accels_for_action ("app.quit", {"<primary>q"});
 	}
+
+	public override int command_line (ApplicationCommandLine command_line) {
+		// keep the application running until we are done with this commandline
+		this.hold ();
+
+		int n_nodes = 1000;
+		int n_edges = 1000;
+		OptionEntry[] options = new OptionEntry[2];
+		options[0] = { "nodes", 'n', OptionFlags.NONE, OptionArg.INT, ref n_nodes, "Number of nodes to generate", null };
+		options[1] = { "edges", 'e', OptionFlags.NONE, OptionArg.INT, ref n_edges, "Number of edges to generate", null };
+
+		var ctx = new OptionContext("Gtkdot Demo");
+		ctx.add_main_entries (options, null);
+
+		string[] argv = command_line.get_arguments();
+		ctx.parse_strv (ref argv);
+
+		var win = new Gtkdot.GraphWindow (this);
+		win.generate_widgets( n_nodes, n_edges );
+		win.present ();
+
+		this.release ();
+		// this.activate();
+		return 0;
+	}
+
+	/*
 
 	public override void activate () {
 
@@ -147,7 +195,7 @@ public class Gtkdot.Application : Gtk.Application {
 		}
 		win.present ();
 
-	}
+	} */
 
 }
 

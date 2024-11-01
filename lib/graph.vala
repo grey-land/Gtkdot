@@ -3,7 +3,8 @@ namespace Gtkdot {
 
 	public class Graph : Gtk.Widget {
 
-		public string title { get; set; default = ""; }
+		public GLib.ListStore edges { get; set; }
+
 		public GraphLayout layout {
 			get { return layout_manager as GraphLayout; }
 		}
@@ -27,29 +28,17 @@ namespace Gtkdot {
 		public Gsk.Stroke stroke;
 
 		construct {
+
 			// set layout manager
 			this.set_layout_manager( new GraphLayout () );
-			this.layout.set_defaults();
+
+			this.stroke = new Gsk.Stroke(1);
+			// this.bg_color.parse("#dddddd");
 
 			this.cm = new Gtk.EventControllerMotion();
 			this.gc = new Gtk.GestureClick();
 			this.gc.set_propagation_phase ( Gtk.PropagationPhase.TARGET   );
 			this.cm.set_propagation_phase ( Gtk.PropagationPhase.TARGET   );
-			this.add_controller( this.gc );
-			this.add_controller( this.cm );
-
-			this.stroke = new Gsk.Stroke(1);
-			this.bg_color.parse("#dddddd");
-
-			/*
-			this.border_color.parse("#6F4E37");
-			this.shadow.color.parse("#9d8b7c");
-			this.selection_color.parse("#cb4335");
-			this.bg_color.parse("#d5d0cc");
-			this.stroke.set_line_cap( Gsk.LineCap.ROUND );
-			this.stroke.set_line_join( Gsk.LineJoin.ROUND );
-			*/
-			// this.enable_selection();
 		}
 
 		public void add_node( Gtk.Widget child ) {
@@ -72,19 +61,33 @@ namespace Gtkdot {
 
 		public override void snapshot( Gtk.Snapshot snapshot ) {
 
-			info("Graph Snapshot requested \n");
-
 			// Apply background
 			snapshot.append_color(this.bg_color,
 				Graphene.Rect().init(
-					//  0
+					// 0, 0, this.get_width(), this.get_height()
 					  - this.margin_start
-					// , 0
 					, - this.margin_top
 					, this.get_width()  + this.margin_start + this.margin_end
 					, this.get_height() + this.margin_top + this.margin_bottom
 				)
 			);
+
+			/*
+			 * Helpful for debugging alignments
+			 *
+			// external border
+			Gdk.RGBA _c = { 1, 0, 0, 1};
+			snapshot.append_border(
+					Gsk.RoundedRect().init_from_rect (
+						Graphene.Rect().init(
+							0, 0, this.get_width(), this.get_height() ), 0),
+					{ 1, 1, 1, 1 }, { _c, _c, _c, _c });
+			// central point
+			snapshot.append_color(_c,
+					Graphene.Rect().init(
+						( this.get_width() / 2 ) - 25,
+						( this.get_height() / 2 ) - 25, 50, 50 )
+					); // */
 
 			// Loop through members and draw edges and widget borders
 			layout.foreach_member( ( member ) => {
@@ -139,12 +142,18 @@ namespace Gtkdot {
 		/*** Enable selection */
 		public void enable_selection() {
 			this.pressed_sig = this.gc.pressed.connect( selection_click_callback );
+			this.add_controller( this.gc );
+			this.add_controller( this.cm );
 		}
 
 		/*** Disable selection */
 		public void disable_selection() {
-			this.gc.disconnect(pressed_sig);
+			this.gc.disconnect( this.release_sig );
+			this.cm.disconnect( this.motion_sig );
+			this.gc.disconnect( this.pressed_sig );
 			this.pressed_sig = -1;
+			this.remove_controller( this.gc );
+			this.remove_controller( this.cm );
 		}
 
 		public signal void selection_started () {}
@@ -160,15 +169,22 @@ namespace Gtkdot {
 			this.selection = Graphene.Rect.zero ();
 
 			// assign selection origin from mouse position
-			this.selection.origin = Graphene.Point().init( (float) x, (float) y );
+			this.selection.origin = Graphene.Point().init(
+				  (float) x // / this.get_scale_value(),
+				, (float) y // / this.get_scale_value()
+			);
 
 			// On mouse move, update selection rectangle
 			// and request to re-render widget for selection
 			// to render selected nodes
 			this.motion_sig = this.cm.motion.connect( ( _x, _y )=>{
 				this.selection.size = Graphene.Size().init(
-										(float) _x - this.selection.origin.x ,
-										(float) _y - this.selection.origin.y );
+										( (float) _x
+											// / this.get_scale_value()
+										) - this.selection.origin.x ,
+										( (float) _y
+											// / this.get_scale_value()
+										) - this.selection.origin.y );
 				this.queue_draw();
 			});
 

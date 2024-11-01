@@ -1,8 +1,0 @@
-# List of source files containing translatable strings.
-# Please keep this file sorted alphabetically.
-data/io.gitlab.vgmkr.dot.desktop.in
-data/io.gitlab.vgmkr.dot.metainfo.xml.in
-data/io.gitlab.vgmkr.dot.gschema.xml
-src/main.vala
-src/window.vala
-src/window.ui

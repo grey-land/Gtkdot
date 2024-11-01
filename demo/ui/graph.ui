@@ -2,8 +2,12 @@
 <interface>
   <template class="GtkdotGraphWindow" parent="GtkApplicationWindow">
     <property name="title" translatable="yes">GtkDot</property>
-    <property name="default-width">800</property>
+             <property name="hexpand">false</property>
+            <property name="vexpand">false</property>
+    <!--
+    <property name="default-width">1200</property>
     <property name="default-height">600</property>
+    -->
     <property name="titlebar">
       <object class="GtkHeaderBar">
         <child type="end">
@@ -20,43 +24,125 @@
             <signal name="clicked" handler="remove_selected" />
           </object>
         </child>
+        <child type="start">
+          <object class="GtkSpinButton" id="scale">
+            <property name="width-request">100</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment" id="scale_adj">
+                <property name="lower">10</property>
+                <property name="value">100</property>
+                <property name="upper">1200</property>
+                <property name="step_increment">10</property>
+                <signal name="value_changed" handler="on_scale" />
+              </object>
+            </property>
+          </object>
+        </child>
       </object>
     </property>
+
     <child>
-      <object class="GtkScrolledWindow" id="scroll">
+      <object class="GtkScrolledWindow">
+
+        <!--
+        <property name="propagate_natural_width">true</property>
+        <property name="propagate_natural_height">true</property>
+        <property name="hscrollbar_policy">always</property>
+        <property name="vscrollbar_policy">always</property>
+        <property name="hexpand">false</property>
+        <property name="vexpand">false</property>
+        -->
+
         <child>
           <object class="GtkdotGraph" id="view">
-            <property name="halign">center</property>
-            <property name="valign">center</property>
+
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
+            <!--
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+                -->
             <property name="margin_top">20</property>
             <property name="margin_bottom">20</property>
             <property name="margin_start">20</property>
             <property name="margin_end">20</property>
+
+            <property name="edges">
+              <object class="GListStore">
+                <property name="item-type">GtkdotGvcGraphEdge</property>
+
+                <child>
+                   <object class="GtkdotGvcGraphEdge">
+                      <property name="from">na</property>
+                      <property name="to">nb</property>
+                   </object>
+                </child>
+
+                <child>
+                   <object class="GtkdotGvcGraphEdge">
+                      <property name="from">na</property>
+                      <property name="to">btn_img</property>
+                   </object>
+                </child>
+
+                <child>
+                   <object class="GtkdotGvcGraphEdge">
+                      <property name="from">nb</property>
+                      <property name="to">btn_img</property>
+                   </object>
+                </child>
+
+              </object>
+            </property>
+
             <child>
-              <object class="GtkLabel" id="na">
-                <property name="label">Gtk Label</property>
-                <property name="width-request">80</property>
-                <property name="height-request">50</property>
+                  <object class="GtkLabel" id="na">
+                    <property name="label">Lb</property>
+                    <!--
+                    <property name="width-request">80</property>
+                    <property name="height-request">50</property>
+                    -->
+                  </object>
+                </child>
+            <child>
+                  <object class="GtkButton" id="nb">
+                    <property name="label">0</property>
+                    <signal name="clicked" handler="generate_click" />
+                  </object>
+                </child>
+            <child>
+              <object class="GtkButton" id="btn_img">
+                <signal name="clicked" handler="pic_clicked" />
+                <child>
+                  <object class="GtkImage" id="i1">
+                    <property name="icon-name">dialog-password-symbolic</property>
+                    <property name="width-request">200</property>
+                    <property name="height-request">100</property>
+                  </object>
+                </child>
               </object>
             </child>
+
             <child>
-              <object class="GtkButton" id="nb">
-                <property name="label">Gtk Button</property>
-                <property name="width-request">100</property>
-                <property name="height-request">50</property>
-              </object>
-            </child>
+                <object class="GtkLabel">
+                </object>
+              </child>
+          </object>
+        </child>
+  <!--
+        <child>
+          <object class="GtkFrame">
+            <property name="label">Diagram</property>
             <child>
-              <object class="GtkImage" id="i1">
-                <property name="icon-name">dialog-password-symbolic</property>
+              <object class="GtkImage" id="pic">
                 <property name="width-request">200</property>
-                <property name="height-request">100</property>
+                <property name="height-request">200</property>
               </object>
             </child>
           </object>
         </child>
+
+-->
       </object>
     </child>
   </template>
