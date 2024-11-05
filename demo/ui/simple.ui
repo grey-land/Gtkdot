@@ -1,41 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <template class="GtkdotGraphWindow" parent="GtkApplicationWindow">
-    <property name="title" translatable="yes">GtkDot</property>
-             <property name="hexpand">false</property>
-            <property name="vexpand">false</property>
+    <property name="title" translatable="yes">GtkDot Simple Demo</property>
     <!--
+    <property name="hexpand">false</property>
+    <property name="vexpand">false</property>
     <property name="default-width">1200</property>
     <property name="default-height">600</property>
     -->
     <property name="titlebar">
       <object class="GtkHeaderBar">
         <child type="end">
-          <object class="GtkMenuButton">
-            <property name="primary">True</property>
-            <property name="icon-name">open-menu-symbolic</property>
-            <property name="tooltip-text" translatable="yes">Main Menu</property>
-            <property name="menu-model">primary_menu</property>
-          </object>
-        </child>
-        <child type="end">
           <object class="GtkButton">
             <property name="icon-name">user-trash-symbolic</property>
             <signal name="clicked" handler="remove_selected" />
-          </object>
-        </child>
-        <child type="start">
-          <object class="GtkSpinButton" id="scale">
-            <property name="width-request">100</property>
-            <property name="adjustment">
-              <object class="GtkAdjustment" id="scale_adj">
-                <property name="lower">10</property>
-                <property name="value">100</property>
-                <property name="upper">1200</property>
-                <property name="step_increment">10</property>
-                <signal name="value_changed" handler="on_scale" />
-              </object>
-            </property>
           </object>
         </child>
       </object>
@@ -44,9 +22,9 @@
     <child>
       <object class="GtkScrolledWindow">
 
-        <!--
         <property name="propagate_natural_width">true</property>
         <property name="propagate_natural_height">true</property>
+        <!--
         <property name="hscrollbar_policy">always</property>
         <property name="vscrollbar_policy">always</property>
         <property name="hexpand">false</property>
@@ -54,50 +32,30 @@
         -->
 
         <child>
-          <object class="GtkdotGraph" id="view">
+          <object class="GtkdotSimpleGraph" id="view">
 
-            <property name="hexpand">true</property>
-            <property name="vexpand">true</property>
+            <signal name="realize" handler="configure_graph" />
+
             <!--
             <property name="halign">center</property>
             <property name="valign">center</property>
-                -->
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            -->
+
+            <!--
             <property name="margin_top">20</property>
             <property name="margin_bottom">20</property>
             <property name="margin_start">20</property>
             <property name="margin_end">20</property>
-
-            <property name="edges">
-              <object class="GListStore">
-                <property name="item-type">GtkdotGvcGraphEdge</property>
-
-                <child>
-                   <object class="GtkdotGvcGraphEdge">
-                      <property name="from">na</property>
-                      <property name="to">nb</property>
-                   </object>
-                </child>
-
-                <child>
-                   <object class="GtkdotGvcGraphEdge">
-                      <property name="from">na</property>
-                      <property name="to">btn_img</property>
-                   </object>
-                </child>
-
-                <child>
-                   <object class="GtkdotGvcGraphEdge">
-                      <property name="from">nb</property>
-                      <property name="to">btn_img</property>
-                   </object>
-                </child>
-
-              </object>
-            </property>
+            -->
 
             <child>
                   <object class="GtkLabel" id="na">
                     <property name="label">Lb</property>
+                    <property name="margin_start">20</property>
+                    <property name="margin_end">20</property>
+
                     <!--
                     <property name="width-request">80</property>
                     <property name="height-request">50</property>
@@ -125,8 +83,27 @@
 
             <child>
                 <object class="GtkLabel">
+                  <property name="label">Label without ID</property>
+                  <property name="margin_start">10</property>
+                  <property name="margin_end">10</property>
                 </object>
               </child>
+
+            <child>
+                <object class="GtkdotSimpleEdge" id="maria">
+                  <property name="from">nb</property>
+                  <property name="to">btn_img</property>
+
+                </object>
+              </child>
+
+            <child>
+                <object class="GtkdotSimpleEdge" id="santa">
+                  <property name="from">nb</property>
+                  <property name="to">btn_img</property>
+                </object>
+              </child>
+
           </object>
         </child>
   <!--
@@ -146,20 +123,4 @@
       </object>
     </child>
   </template>
-  <menu id="primary_menu">
-    <section>
-      <item>
-        <attribute name="label" translatable="yes">_Preferences</attribute>
-        <attribute name="action">app.preferences</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
-        <attribute name="action">win.show-help-overlay</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_About GtkDot</attribute>
-        <attribute name="action">app.about</attribute>
-      </item>
-    </section>
-  </menu>
 </interface>

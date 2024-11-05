@@ -18,18 +18,16 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-[GtkTemplate (ui = "/io/gitlab/vgmkr/dot/ui/graph.ui")]
+[GtkTemplate (ui = "/io/gitlab/vgmkr/dot/ui/light.ui")]
 public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
-	[GtkChild] private unowned Gtkdot.Graph view;
-	[GtkChild] private unowned Gtk.Label na;
-	[GtkChild] private unowned Gtk.Button nb;
-	[GtkChild] private unowned Gtk.Image i1;
+	[GtkChild] private unowned Gtkdot.LightGraph view;
+	[GtkChild] private unowned Gtk.Button generator;
 
 
 	private int initial_h = -1;
 	private int initial_w = -1;
-
+	private ulong _alloc;
 	private string[] icons = {
 			"dialog-password-symbolic",
 			"non-starred-symbolic",
@@ -43,45 +41,69 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
 	public GraphWindow (Gtk.Application app) {
 		Object (application: app);
-		this.view.enable_selection();
-		this.view.realize.connect( ()=>{
-			this.scale_adj.value = 100;
-			this.on_scale();
-			});
-		this.view.layout.set_attribute("rankdir", "BT");
-		/*
-		this.view.layout.set_attribute("fontsize", "8");
-		this.view.layout.set_attribute("margin", "0.4");
-		this.view.layout.set_attribute("pad", "0.4");
-		*/
-		this.view.border_color.parse("#6F4E37");
-		this.view.border_color.alpha = 0.5f;
-		this.view.shadow.color.parse("#9d8b7c");
-		this.view.selection_color.parse("#cb4335");
-		this.view.bg_color.parse("#d5d0cc");
-	}
 
-	[GtkChild] private unowned Gtk.Adjustment scale_adj;
-	[GtkCallback] private void on_scale() {
-		this.view.layout.scale_factor = scale_adj.value / 100;
-		this.view.queue_resize ();
+
+		this.view.stroke.set_line_width(2);
+		this.view.set_css_classes({"graph"});
+		this.set_css_classes({"window"});
+
+
+		Gtk.CssProvider cssp = new Gtk.CssProvider();
+		cssp.load_from_string("""
+			.window {
+				color: white;
+				background:  #d0d3d4 ;
+			}
+
+			.window > headerbar {
+				color: #888888;
+				background:  #d0d3d4 ;
+				background-color:  #d0d3d4 ;
+			}
+
+			.window > button:hover {
+				background: #888888 ;
+				background-color: #888888 ;
+			}
+
+			.graph {
+				padding: 20px;
+				color: #e67e22;
+			}
+
+			.graph button {
+				border: 2px solid #888888;
+				box-shadow: 6px 8px #888888;
+			}
+
+			.graph button:hover {
+				border: 2px solid #555555;
+			}
+
+			.graph button:active {
+				border: 2px solid #555555;
+				box-shadow: 6px 8px #555555;
+			}
+
+			""");
+		Gtk.StyleContext.add_provider_for_display(
+			this.get_display(),
+			cssp,
+			Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+			//Gtk.STYLE_PROVIDER_PRIORITY_USER
+			);
+
 	}
 
 	[GtkCallback]
-	private void pic_clicked (Gtk.Widget btn) {
-		i1.paintable = this.view.layout.get_dot_picture();
-	}
-
-	[GtkCallback]
-	private void remove_selected (Gtk.Widget btn) {
-		print("remove_selected\n");
-		this.view.layout.remove_selected();
-		this.view.queue_draw();
+	private void configure_graph () {
+		unowned	var graph = this.view.get_graph();
+		graph.safe_set("ratio", "compress", "" );
+		graph.safe_set("rankdir", "LR", "" );
 	}
 
 	[GtkCallback]
 	private void generate_click (Gtk.Widget btn) {
-		print("generate_click\n");
 		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
 		new_btn.clicked.connect(this.generate_click);
 		this.view.add_node( new_btn );
@@ -106,6 +128,7 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 					b.visible = false;
 				});
 
+			/*
 
 			int margin = ( i % 3 == 0 )
 				? int.max( 0, GLib.Random.int_range(1, 8) )
@@ -115,12 +138,14 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 			widget.margin_start  = margin;
 			widget.margin_end    = margin;
 			// widget.halign = Gtk.Align.CENTER;
+			*/
 
-			int size = int.max( 50, GLib.Random.int_range(50, 150) );
+			int size = 50; //int.max( 50, GLib.Random.int_range(50, 150) );
 			widget.set_size_request(size, size);
 
+			var node = this.view.add_node( widget );
+			node.safe_set("label", "%d".printf(i), "");
 
-			this.view.add_node( widget );
 			nodes += widget;
 
 		}
@@ -159,8 +184,8 @@ public class Gtkdot.Application : Gtk.Application {
 		// keep the application running until we are done with this commandline
 		this.hold ();
 
-		int n_nodes = 1000;
-		int n_edges = 1000;
+		int n_nodes = 10;
+		int n_edges = 10;
 		OptionEntry[] options = new OptionEntry[2];
 		options[0] = { "nodes", 'n', OptionFlags.NONE, OptionArg.INT, ref n_nodes, "Number of nodes to generate", null };
 		options[1] = { "edges", 'e', OptionFlags.NONE, OptionArg.INT, ref n_edges, "Number of edges to generate", null };
@@ -176,26 +201,8 @@ public class Gtkdot.Application : Gtk.Application {
 		win.present ();
 
 		this.release ();
-		// this.activate();
 		return 0;
 	}
-
-	/*
-
-	public override void activate () {
-
-		// Initialize Widgets so that UI can find the classes
-		typeof ( Gtkdot.Graph );
-
-		base.activate ();
-
-		var win = this.active_window;
-		if (win == null) {
-			win = new Gtkdot.GraphWindow (this);
-		}
-		win.present ();
-
-	} */
 
 }
 

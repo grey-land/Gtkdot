@@ -1,29 +1,109 @@
 namespace Gtkdot {
 
-	public static int default_child_width = 40;
-	public static int default_child_height = 40;
-	public static int default_margin = 2;
-
-	public errordomain GraphError {
-		DOT_ERROR,
-		CLI_ERROR
-	}
-
-	double to_inches( double val ) {
-		return val / 25.4 / 3;
-	}
-
-	double from_inches( double val ) {
-		return val * 25.4 * 3;
-	}
-
-	public delegate bool DelegateMember ( GvcGraphMember member );
-
-	public enum GvcGraphMemberKind {
+	public enum GraphMemberKind {
 		  NODE
 		, EDGE
 		// , SUBGRAPH Not implemented
 		;
+	}
+
+	/*** At present, most device-independent units are either inches or points, which we take as 72 points per inch. */
+	public static double points_to_inches(double p) { return p / 72; }
+	public static double inches_to_points(double p) { return p * 72; }
+
+	/*** Parse graphviz bounding box and return width */
+	public static double get_bb_w(string bb ) {
+		return ( bb != null && bb.split(",").length == 4 )
+			? double.parse( bb.split(",")[2] )
+			: 0;
+	}
+
+	/*** Parse graphviz bounding box and return height */
+	public static double get_bb_h(string bb) {
+		return ( bb != null && bb.split(",").length == 4 )
+			? double.parse( bb.split(",")[3] )
+			: 0;
+	}
+
+	public static string get_widget_id (Gtk.Widget widget) {
+		if ( widget.get_id() == null ) {
+			Gtk.Widget* _ptr = widget;
+			return  "%p".printf(_ptr);
+		}
+		return widget.get_id();
+	}
+
+	public delegate bool TraverseNode( Gvc.Graph graph, Gtk.Widget node_widget, Gvc.Node node);
+
+
+	/**
+	 * Process internal graphviz diagram and return result.
+	 *
+	 * @param output_format Graphviz format to use as output, dot|xdot|png|json|...
+	 * @return raw data of the rendered diagram.
+	 */
+	public static uint8[] render_diagram( Gvc.Graph _graph, string layout_engine = "dot", string output_format = "dot" ) {
+		uint8[] ret = {};
+		Gvc.Context _ctx = new Gvc.Context();
+		_ctx.layout(_graph, layout_engine );
+		_ctx.render_data(_graph, output_format, out ret);
+		_ctx.free_layout(_graph);
+		return ret;
+	}
+
+	/*** Returns internal graphviz diagram as Gdk.Texture. */
+	public static Gdk.Texture render_texture( Gvc.Graph _graph, string layout_engine = "dot",  string format = "svg" ) throws GLib.Error {
+		return Gdk.Texture.from_bytes (
+					new GLib.Bytes (
+						render_diagram (_graph, layout_engine, format) ) );
+	}
+
+	public static Gdk.Pixbuf render_pixbuf( Gvc.Graph _graph, string layout_engine = "dot", string format = "png" ) throws GLib.Error {
+		return new Gdk.Pixbuf.from_stream (
+					new MemoryInputStream.from_bytes (
+						new GLib.Bytes (
+							render_diagram (_graph, layout_engine, format) )
+					)
+				);
+	}
+
+	public void parse_xdot (string? xdot, out Gsk.Path path) {
+		path = null;
+		if ( xdot == null )
+			return;
+
+		string[] parts = xdot.split(" ");
+		for ( int i = 0; i < parts.length; i++ ) {
+			switch ( parts[i] ) {
+						case "b": // B-Spine
+						case "B": // Filled B-Spine
+							i++;
+							path = build_bspline(
+									parse_xdot_points(parts, ref i), ( parts[i-1] == "B" ) );
+							break;
+						case "L": // Polyline
+						case "P": // Filled Polygon
+						case "p": // Polygon
+							i++;
+							path = build_poly(
+										parse_xdot_points(parts, ref i),
+										// Close poly when polygon
+										( parts[i-1] == "P" || parts[i-1] == "p" )
+									);
+							break;
+						case "E":
+						case "e":
+						case "t":
+						case "T":
+						case "F":
+						case "c":
+						case "C":
+						default:
+							break;
+			}
+
+		}
+
 	}
 
 	public static Graphene.Point[] parse_xdot_points ( string[] parts, ref int i ) {

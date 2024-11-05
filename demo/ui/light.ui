@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GtkdotGraphWindow" parent="GtkApplicationWindow">
+    <property name="title" translatable="yes">GtkDot Light Demo</property>
+    <child>
+      <object class="GtkdotLightGraph" id="view">
+        <signal name="realize" handler="configure_graph" />
+        <child>
+          <object class="GtkButton" id="generator">
+            <property name="label">0</property>
+            <signal name="clicked" handler="generate_click" />
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
