@@ -1,16 +1,27 @@
+/* application.vala
+ *
+ * Copyright 2024 @grey-land
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 namespace Gtkdot {
 
 	public class SimpleGraph : BaseGraph {
 
-		public static Gdk.RGBA selection_color = { 1, 0, 0, 1 };
-		public static Gdk.RGBA selection_fill_color = { 1, 0, 0, 0.1f };
 		public static Gsk.Stroke stroke = new Gsk.Stroke(1);
-
-		public static Gdk.RGBA border_color = { 0, 0, 0, 1 };
-		public static Gsk.Shadow shadow = {
-				{ 0.5f, 0.5f, 0.5f, 1 },
-				1, 1, 1
-			};
 
 		public static GraphMemberKind get_kind ( Gtk.Widget widget ) {
 			return widget.get_type().is_a( typeof(SimpleEdge) )
@@ -47,6 +58,7 @@ namespace Gtkdot {
 			this.gc = new Gtk.GestureClick();
 			this.gc.set_propagation_phase ( Gtk.PropagationPhase.TARGET );
 			this.cm.set_propagation_phase ( Gtk.PropagationPhase.TARGET );
+			this.add_css_class ("graph");
 		}
 
 		public Gtk.Widget get_member ( string id ) {
@@ -69,7 +81,8 @@ namespace Gtkdot {
 			Gvc.Node? _from = _graph.find_node( se.from );
 			Gvc.Node? _to = _graph.find_node( se.to );
 			if ( _from != null && _to != null ) {
-				_graph.create_edge( _from, _to, get_widget_id(se) );
+				Gvc.Edge e = _graph.create_edge( _from, _to, get_widget_id(se) );
+				// e.safe_set("arrowhead", "none", "");
 				if ( se.parent == null )
 					se.set_parent(this);
 				Gtk.Widget* _ptr = se;
@@ -225,19 +238,31 @@ namespace Gtkdot {
 
 		public override void snapshot(Gtk.Snapshot snapshot) {
 
-			/* Apply background
-			snapshot.append_color(SimpleGraph.bg_color,
-				Graphene.Rect().init(
-					0, 0, this.get_width(), this.get_height()
-				)
-			); */
+			if ( this.selection_is_active() ) {
+
+				// Fill selection box if selection is active
+				Gdk.RGBA sc = this.get_color().copy();
+				sc.alpha = 0.2f;
+				// fill selection box
+				snapshot.append_color( sc, this.selection);
+
+				// Iterate through visible widgets and set selection
+				// flag based on current selection
+				//
+				// By setting selection flag we force widget
+				this.members.@foreach( (k, child) => {
+					if ( child->should_layout() ) {
+						SimpleMember lm = this.layout.get_member(child);
+						lm.set_selected( lm.contains_selection(selection) );
+					}
+				});
+
+			}
 
 			base.snapshot(snapshot);
 
-			// Draw selection box if selection is active
-			if ( this.selection_is_active() ) {
-				// fill selection box
-				snapshot.append_color( SimpleGraph.selection_fill_color, this.selection);
+			// Stroke selection box if selection is active
+			if ( this.selection_is_active() )
 				// stroke selection box
 				snapshot.append_border(
 					Gsk.RoundedRect().init_from_rect (this.selection, 0),
@@ -245,48 +270,10 @@ namespace Gtkdot {
 						stroke.get_line_width(),
 						stroke.get_line_width(),
 						stroke.get_line_width() },
-					{ SimpleGraph.selection_color,
-						SimpleGraph.selection_color,
-						SimpleGraph.selection_color,
-						SimpleGraph.selection_color });
-			}
-
-			this.members.@foreach( (k, child) => {
-
-				if ( child->should_layout() ) {
-
-					SimpleMember lm = this.layout.get_member(child);
-
-					if ( this.selection_is_active() )
-						lm.set_selected( lm.contains_selection(selection) );
-
-					if ( lm.kind == GraphMemberKind.NODE ) {
-						Gdk.RGBA c = lm.is_selected()
-											? SimpleGraph.selection_color
-											: SimpleGraph.border_color;
-						Gsk.RoundedRect _r = Gsk.RoundedRect().init_from_rect( lm.bounds, 4)
-												.shrink(
-													  0 // - stroke.get_line_width()
-													, SimpleGraph.stroke.get_line_width()
-													, 0 // - stroke.get_line_width()
-													, - SimpleGraph.stroke.get_line_width()
-												);
-						// Border
-						snapshot.append_border(_r, {
-								  stroke.get_line_width()
-								, stroke.get_line_width()
-								, stroke.get_line_width()
-								, stroke.get_line_width()
-							}, { c, c, c, c });
-
-						// Shadow
-						snapshot.append_outset_shadow (_r,
-							SimpleGraph.shadow.color,
-							SimpleGraph.shadow.dx, SimpleGraph.shadow.dy, 0, SimpleGraph.shadow.radius);
-
-					}
-				}
-			});
+					{ this.get_color(),
+						this.get_color(),
+						this.get_color(),
+						this.get_color() });
 
 		}
 

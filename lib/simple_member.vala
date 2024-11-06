@@ -1,6 +1,27 @@
+/* application.vala
+ *
+ * Copyright 2024 @grey-land
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 namespace Gtkdot {
 
 	public class SimpleEdge : Gtk.Widget, ISimpleMember {
+
+		public static Gsk.Stroke stroke = new Gsk.Stroke(1);
 
 		public string from {get;construct;}
 		public string to {get;construct;}
@@ -8,16 +29,12 @@ namespace Gtkdot {
 		public GraphMemberKind kind { get; construct; }
 
 		public Graphene.Point offset;
-		public Gsk.Path[] paths;
-		public Graphene.Rect bounds { get; set; } /*
-			replace bounds,offset,paths with
-		public Gsk.Path curve { get; set; }
-		public Gsk.Path arrows { get; set; }
-		*/
+		public Gsk.Path path;
+		public Graphene.Rect bounds { get; set; }
 
 		construct {
 			this.kind = GraphMemberKind.NODE;
-			// this.add_css_class ("item");
+			this.add_css_class ("edge");
 		}
 
 		public bool is_selected() {
@@ -33,12 +50,13 @@ namespace Gtkdot {
 				  (int) this.bounds.origin.x
 				, (int) this.bounds.origin.y
 				, 0
+				// , (int) this.bounds.size.width
 				, 0
+				// , (int) this.bounds.size.height
 			};
 		}
 
 		public void parse_xdot_attrs(string[] attrs) {
-			Gsk.Path[] _paths = {};
 			Gsk.PathBuilder builder = new Gsk.PathBuilder();
 			Graphene.Rect _bounds;
 			Gsk.Path _path;
@@ -48,28 +66,18 @@ namespace Gtkdot {
 				parse_xdot( attr, out _path);
 				if ( _path == null )
 					continue;
-				_paths += _path;
-				/*
-				if ( attr == "_draw_" ) {
-					unowned Gsk.PathPoint start;
-					_path.get_start_point (out start);
-					this.offset = start.get_position(_path);
-				} else {
-					builder.add_path( _path );
-				}
-				*/
 				builder.add_path( _path );
+				// If path is not closed ( usually the main curve path )
+				// then add reverse path to be able to close the path
+				// and behave as a shape that can be filled.
+				if ( ! _path.is_closed() )
+					builder.add_reverse_path( _path );
 			}
-			_path = builder.to_path();
-			_path.get_bounds(out _bounds);
+			this.path = builder.to_path();
+			this.path.get_bounds(out _bounds);
 			this.bounds = _bounds;
-			this.paths = _paths;
 			this.offset = _bounds.origin;
 		}
-
-
-
-
 
 		public SimpleEdge(string from, string to) {
 			GLib.Object(from:from, to: to);
@@ -80,11 +88,9 @@ namespace Gtkdot {
 		}
 
 		public bool contains_selection (Graphene.Rect selection) {
-			foreach ( var _path in this.paths ) {
-				if ( _path.is_closed() && _path.in_fill( selection.origin, Gsk.FillRule.EVEN_ODD ) )
-					return true;
-			}
-			return this.bounds.intersection(selection, null);
+			return
+				this.path.in_fill( selection.origin, Gsk.FillRule.EVEN_ODD ) ||
+				this.bounds.intersection(selection, null);
 		}
 
 		/**
@@ -105,31 +111,26 @@ namespace Gtkdot {
 		}
 
 		public override void snapshot(Gtk.Snapshot snapshot) {
-			snapshot.save();
-			snapshot.translate( Graphene.Point().init( - this.offset.x, - this.offset.y ) );
-			print(@"EDGE: STATES.FLAGS: $( get_state_flags() )\n");
-			foreach ( var _path in this.paths ) {
-				snapshot.append_stroke( _path,
-								SimpleGraph.stroke,
-								this.is_selected()
-									? SimpleGraph.selection_color
-									: SimpleGraph.border_color
-								// this.get_color()
-							);
-				if ( _path.is_closed() )
-					snapshot.append_fill( _path,
-								Gsk.FillRule.WINDING,
-								this.is_selected()
-									? SimpleGraph.selection_color
-									: SimpleGraph.border_color
-								// this.get_color()
-							);
-			}
 			/*
 			Pango.Layout pl = new Pango.Layout( this.get_pango_context() );
-			pl.set_text( "[%s]".printf( get_widget_id(this) ), -1 );
-			snapshot.append_layout(pl, color);
+			pl.set_alignment (Pango.Alignment.CENTER);
+			pl.set_text( get_widget_id(this), -1 );
+			int tw, th;
+			pl.get_pixel_size (out tw, out th);
+			snapshot.save();
+			snapshot.translate( Graphene.Point().init(
+					( this.bounds.size.width - (float) tw ) / 2,
+					( this.bounds.size.height - (float) th ) / 2
+				)
+			);
+			snapshot.append_layout(pl, this.get_color() );
+			snapshot.restore();
 			*/
+
+			snapshot.save();
+			snapshot.translate( Graphene.Point().init( - this.offset.x, - this.offset.y ) );
+			snapshot.append_stroke( this.path, SimpleEdge.stroke, this.get_color() );
+			snapshot.append_fill( this.path, Gsk.FillRule.EVEN_ODD, this.get_color() );
 			snapshot.restore();
 		}
 
@@ -146,6 +147,11 @@ namespace Gtkdot {
 			GLib.Object(layout_manager: manager,
 						child_widget: child,
 						kind: SimpleGraph.get_kind(child) );
+			if ( this.kind == GraphMemberKind.EDGE ) {
+				child.add_css_class ("edge");
+			} else {
+				child.add_css_class ("node");
+			}
 		}
 
 		public void set_selected( bool selected ) {
@@ -154,7 +160,6 @@ namespace Gtkdot {
 			} else {
 				this.child_widget.unset_state_flags ( Gtk.StateFlags.SELECTED ) ;
 			}
-			this.child_widget.queue_draw();
 		}
 
 		public bool is_selected() {

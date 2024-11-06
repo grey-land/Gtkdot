@@ -1,5 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <interface>
+  <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="label">Dot Layout</attribute>
+        <attribute name="action">win.dot-layout</attribute>
+      </item>
+      <item>
+        <attribute name="label">Neato Layout</attribute>
+        <attribute name="action">win.neato-layout</attribute>
+      </item>
+      <item>
+        <attribute name="label">Sfdp Layout</attribute>
+        <attribute name="action">win.sfdp-layout</attribute>
+      </item>
+      <item>
+        <attribute name="label">Circo Layout</attribute>
+        <attribute name="action">win.circo-layout</attribute>
+      </item>
+      <item>
+        <attribute name="label">TwoPI Layout</attribute>
+        <attribute name="action">win.twopi-layout</attribute>
+      </item>
+    </section>
+  </menu>
+
   <template class="GtkdotGraphWindow" parent="GtkApplicationWindow">
     <property name="title" translatable="yes">GtkDot Simple Demo</property>
     <!--
@@ -14,6 +40,14 @@
           <object class="GtkButton">
             <property name="icon-name">user-trash-symbolic</property>
             <signal name="clicked" handler="remove_selected" />
+          </object>
+        </child>
+        <child type="end">
+          <object class="GtkMenuButton" id="main_menu">
+            <property name="primary">True</property>
+            <property name="icon-name">open-menu-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Main Menu</property>
+            <property name="menu-model">primary_menu</property>
           </object>
         </child>
       </object>
@@ -33,8 +67,6 @@
 
         <child>
           <object class="GtkdotSimpleGraph" id="view">
-
-            <signal name="realize" handler="configure_graph" />
 
             <!--
             <property name="halign">center</property>

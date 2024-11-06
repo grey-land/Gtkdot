@@ -1,6 +1,6 @@
 /* application.vala
  *
- * Copyright 2024 Unknown
+ * Copyright 2024 @grey-land
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -140,7 +140,7 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 			// widget.halign = Gtk.Align.CENTER;
 			*/
 
-			int size = 50; //int.max( 50, GLib.Random.int_range(50, 150) );
+			int size = 80; //int.max( 50, GLib.Random.int_range(50, 150) );
 			widget.set_size_request(size, size);
 
 			var node = this.view.add_node( widget );
@@ -210,4 +210,5 @@ int main (string[] args) {
 	var app = new Gtkdot.Application ();
 	return app.run (args);
 }
+
 

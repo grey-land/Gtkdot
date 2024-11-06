@@ -1,6 +1,6 @@
 /* application.vala
  *
- * Copyright 2024 Unknown
+ * Copyright 2024 @grey-land
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,36 +46,114 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 		add_action_entries ({
 			{ "delete", this.remove_selected },
 			{ "select-all", this.select_all },
+			{ "dot-layout", this.set_dot_layout },
+			{ "neato-layout", this.set_neato_layout },
+			{ "sfdp-layout", this.set_sfdp_layout },
+			{ "circo-layout", this.set_circo_layout },
+			{ "twopi-layout", this.set_twopi_layout },
 		}, this);
+
+		// this.get_settings().gtk_application_prefer_dark_theme = true;
+		Gtk.CssProvider cssp = new Gtk.CssProvider();
+		cssp.load_from_string("""
+			/* Graph */
+			.graph {
+				padding: 10px;
+				/* use default gtk background */
+				background: @content_view_bg;
+			}
+			/* add color to selection rect */
+			.graph:active {
+				color: @theme_selected_bg_color;
+			}
+			/* revert changes color to child widgers */
+			.graph:active * {
+				color: @theme_text_color;
+			}
+
+			/* Edge */
+			/* default edge style */
+			.edge, .graph:active .edge {
+				color: @unfocused_insensitive_color;
+				filter: drop-shadow( 0px  1px 1px #929292 );
+			}
+
+			/* selected edge style */
+			.edge:selected, .graph:active  .edge:selected {
+				color: @theme_selected_bg_color;
+				filter: drop-shadow( 0px  1px 1px @theme_fg_color );
+			}
+
+
+			/* Node */
+			/* default node style */
+			.node { box-shadow: 0 -2px 1px #929292 inset; }
+
+			/* selected node style */
+			.node:selected {
+				color: @theme_text_color;
+				box-shadow: 0 -2px 2px #52dbaa inset;
+			}
+
+			/* Disable default focus outline */
+			.node:focus,
+			.node:focus-within,
+			.node:focus-visible,
+			.node:checked {
+				outline: none;
+			}
+
+			""");
+
+		Gtk.StyleContext.add_provider_for_display(
+			this.get_display(),
+			cssp,
+			Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+			//Gtk.STYLE_PROVIDER_PRIORITY_USER
+		);
+
+		this.view.enable_selection();
+		SimpleEdge.stroke.set_line_width(1.5f);
+		// this.view.stroke.set_line_width(2.4f);
+		this.view.stroke.set_line_cap(Gsk.LineCap.ROUND);
+		this.view.stroke.set_line_join(Gsk.LineJoin.ROUND);
+
+
+		unowned	var graph = this.view.get_graph();
+		// graph.safe_set("ratio", "expand", "" );
+		graph.safe_set("ratio", "compress", "" );
+		// graph.safe_set("rankdir", "BT", "" );
+		graph.safe_set("rankdir", "LR", "" );
+		graph.safe_set("overlap", "false", "" );
+	}
+
+	private void set_dot_layout(){
+		this.view.layout.layout_engine = "dot";
+		this.view.layout.layout_changed ();
+	}
+
+	private void set_neato_layout(){
+		this.view.layout.layout_engine = "neato";
+		this.view.layout.layout_changed ();
+	}
+
+	private void set_sfdp_layout(){
+		this.view.layout.layout_engine = "sfdp";
+		this.view.layout.layout_changed ();
+	}
+
+	private void set_circo_layout(){
+		this.view.layout.layout_engine = "circo";
+		this.view.layout.layout_changed ();
+	}
+
+	private void set_twopi_layout(){
+		this.view.layout.layout_engine = "twopi";
+		this.view.layout.layout_changed ();
 	}
 
 	private void select_all () {
 		this.view.select_all();
-	}
-
-	[GtkCallback]
-	private void configure_graph () {
-
-		this.view.enable_selection();
-		this.view.border_color.parse("#6F4E37");
-		this.view.border_color.alpha = 0.5f;
-		this.view.shadow.color.parse("#9d8b7c");
-		this.view.selection_color.parse("#cb4335");
-
-		// this.get_settings().gtk_application_prefer_dark_theme = true;
-		print("gtk_theme_name: %s\n",
-			this.get_settings().gtk_theme_name
-
-		);
-		this.get_style_context ();
-
-		unowned	var graph = this.view.get_graph();
-
-		graph.safe_set("ratio", "compress", "" );
-		// graph.safe_set("rankdir", "BT", "" );
-		graph.safe_set("rankdir", "LR", "" );
-		// graph.safe_set("pad", "0.4", "" );
-
 	}
 
 	[GtkCallback]
@@ -86,24 +164,18 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 	[GtkCallback]
 	private void remove_selected () {
 		this.view.remove_selected();
-		// this.view.queue_draw();
 	}
 
 	[GtkCallback]
 	private void generate_click (Gtk.Button btn) {
-
 		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
 		// Gtk.Button new_btn = new Gtk.Button.with_label("btn %d".printf( (int) view.n_members ) );
-		// int size = int.max( 50, GLib.Random.int_range(50, 150) );
-		// new_btn.set_size_request(size, size);
+		int size = 50; // int.max( 50, GLib.Random.int_range(50, 150) );
+		new_btn.set_size_request(50, 30);
 		new_btn.clicked.connect(this.generate_click);
-
-		Gtk.Widget* ptr = child;
-		print(" -> Add new button %p label:%s\n", ptr, new_btn.label );
-
 		this.view.add_full_node( new_btn );
 		this.view.add_full_edge( btn, new_btn );
-
+		new_btn.grab_focus();
 	}
 
 	public void generate_widgets(int n_nodes, int n_edges) {
@@ -123,8 +195,7 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 				widget.clicked.connect( (b)=>{
 					b.visible = false;
 				});
-
-
+			/*
 			int margin = ( i % 3 == 0 )
 				? int.max( 0, GLib.Random.int_range(10, 20) )
 				: 0;
@@ -133,10 +204,9 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 			widget.margin_start  = margin;
 			widget.margin_end    = margin;
 			// widget.halign = Gtk.Align.CENTER;
-/*
-			int size = int.max( 50, GLib.Random.int_range(50, 150) );
-			widget.set_size_request(size, size);
-*/
+			*/
+			widget.set_size_request(50, 30);
+
 			this.view.add_full_node( widget );
 			nodes += widget;
 
@@ -150,8 +220,6 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 		}
 
 	}
-
-
 
 }
 
