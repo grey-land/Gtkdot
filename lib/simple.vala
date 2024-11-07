@@ -30,10 +30,13 @@ namespace Gtkdot {
 				;
 		}
 
-		public SimpleLayout layout { get { return layout_manager as SimpleLayout; } }
+		public unowned Gvc.Graph graph { get { return this._graph; } }
+		public GLib.HashTable<string,Gtk.Widget*> members;
 		public uint n_members { get { return this.members.length; } }
+		public SimpleLayout layout { get { return layout_manager as SimpleLayout; } }
 
-		protected GLib.HashTable<string,Gtk.Widget*> members;
+		public signal void edge_added( Gtk.Widget child, Gvc.Edge edge );
+		public signal void node_added( Gtk.Widget child, Gvc.Node node );
 
 		private Graphene.Rect selection = {};
 		private Gtk.GestureClick gc;
@@ -74,6 +77,7 @@ namespace Gtkdot {
 			Gvc.Node n = this.add_node(child);
 			Gtk.Widget* _ptr = child;
 			this.members.insert( n.name(), _ptr );
+			this.node_added( child, n );
 			return this.layout.create_layout_child( this, child ) as SimpleMember;
 		}
 
@@ -87,6 +91,7 @@ namespace Gtkdot {
 					se.set_parent(this);
 				Gtk.Widget* _ptr = se;
 				this.members.insert( get_widget_id(se), _ptr );
+				this.edge_added( se, e );
 				return this.layout.create_layout_child( this, se ) as SimpleMember;
 			}
 			warning ("Failed to connect edge");
@@ -103,6 +108,32 @@ namespace Gtkdot {
 					node = _graph.get_next_node(node);
 				}
 				child = child.get_next_sibling();
+			}
+		}
+
+		public void set_visibility (Gtk.Widget child, bool visible) {
+			switch ( SimpleGraph.get_kind(child) ) {
+				case GraphMemberKind.EDGE:
+					child.set_visible(visible);
+					break;
+				case GraphMemberKind.NODE:
+					Gvc.Node? n = _graph.find_node( get_widget_id(child) );
+					if ( n != null ) {
+						Gtk.Widget _e;
+						Gvc.Edge e;
+						for (e = _graph.get_first_edge_out(n); e != null; e = _graph.get_next_edge_out(e)) {
+							_e = this.get_member( e.name() );
+							_e.set_visible(visible);
+						}
+						for (e = _graph.get_first_edge_in(n); e != null; e = _graph.get_next_edge_in(e)) {
+							_e = this.get_member( e.name() );
+							_e.set_visible(visible);
+						}
+					}
+					child.set_visible(visible);
+					break;
+				default:
+					break;
 			}
 		}
 
@@ -279,88 +310,5 @@ namespace Gtkdot {
 
 	}
 
-
-
-	/**
-	 * SimpleLayout extexts LightLayout managing both nodes and edges as Gtk.Widgets.
-	 */
-	public class SimpleLayout : LightLayout {
-
-		public SimpleGraph parent {
-			get { return this.get_widget() as SimpleGraph; }
-		}
-
-		protected override void root () {
-			if ( this.parent == null ) {
-				critical("SimpleLayout should contain SimpleGraph widget." );
-				return;
-			}
-			Gtk.Widget child = this.parent.get_first_child ();
-			while ( child != null ) {
-				switch ( SimpleGraph.get_kind(child) ) {
-					case GraphMemberKind.NODE:
-						this.parent.add_full_node(child);
-						break;
-					default:
-						this.parent.connect_edge( child as SimpleEdge );
-						break;
-				}
-				child = child.get_next_sibling();
-			}
-		}
-
-		/*** Get SimpleMember for given widget */
-		public SimpleMember get_member ( Gtk.Widget widget ) {
-			return this.get_layout_child( widget ) as SimpleMember;
-		}
-
-		public override Gtk.LayoutChild create_layout_child (Gtk.Widget container, Gtk.Widget child) {
-			return new SimpleMember(this, child);
-		}
-
-		public override void allocate (Gtk.Widget widget, int width, int height, int baseline) {
-
-			unowned Gvc.Graph _graph = this.parent.get_graph();
-
-			_graph.safe_set("_draw_", "", "");
-			_graph.safe_set("size",
-					"%g,%g".printf(
-						points_to_inches( (double) width ), points_to_inches( (double) height )
-						), "");
-
-			debug("Diagram: %s\n",
-				(string) render_diagram(_graph, this.layout_engine, "xdot") );
-
-			SimpleMember member;
-			Gvc.Node? n = null;
-			Gvc.Edge? e = null;
-			for ( n = _graph.get_first_node(); n != null; n = _graph.get_next_node(n) ) {
-
-				member = this.get_member( this.parent.get_member( n.name() ) );
-				// member.allocate_node( n, baseline );
-				member.parse_xdot_attrs({ n.get("_draw_") });
-				member.child_widget.allocate_size( member.compute_allocation(), baseline );
-
-
-				for (e = _graph.get_first_edge_out(n); e != null; e = _graph.get_next_edge_out(e)) {
-					member = this.get_member( this.parent.get_member( e.name() ) );
-					// member.allocate_edge( e, baseline );
-					member.parse_xdot_attrs({ e.get("_draw_"), e.get("_tdraw_"), e.get("_hdraw_")  });
-					member.child_widget.allocate_size( member.compute_allocation(), baseline );
-
-					// Force redraw all edges as in any new allocation the
-					// edges' position and size changes.
-					member.child_widget.queue_draw();
-				}
-
-			}
-
-			if ( enable_signals )
-				this.layout_updated();
-
-		}
-
-	}
-
-
 }
+

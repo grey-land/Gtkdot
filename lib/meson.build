@@ -15,8 +15,12 @@ gtkdot_deps = [
 gtkdot_sources = [
 	'utils.vala',
 	'interfaces.vala',
+
 	'light.vala',
+	'light_layout.vala',
+
 	'simple.vala',
+	'simple_layout.vala',
 	'simple_member.vala',
 ]
 

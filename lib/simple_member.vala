@@ -129,7 +129,7 @@ namespace Gtkdot {
 
 			snapshot.save();
 			snapshot.translate( Graphene.Point().init( - this.offset.x, - this.offset.y ) );
-			snapshot.append_stroke( this.path, SimpleEdge.stroke, this.get_color() );
+			snapshot.append_stroke( this.path, stroke, this.get_color() );
 			snapshot.append_fill( this.path, Gsk.FillRule.EVEN_ODD, this.get_color() );
 			snapshot.restore();
 		}

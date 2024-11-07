@@ -22,13 +22,8 @@
 public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
 	[GtkChild] private unowned Gtkdot.SimpleGraph view;
-	[GtkChild] private unowned Gtk.Label na;
-	[GtkChild] private unowned Gtk.Button nb;
-	[GtkChild] private unowned Gtk.Image i1;
 
-
-	private int initial_h = -1;
-	private int initial_w = -1;
+	private int n_nodes = 0;
 
 	private string[] icons = {
 			"dialog-password-symbolic",
@@ -92,7 +87,8 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 			/* selected node style */
 			.node:selected {
 				color: @theme_text_color;
-				box-shadow: 0 -2px 2px #52dbaa inset;
+				box-shadow: 0 -2px 2px @theme_selected_bg_color inset;
+				border: 1px solid @theme_selected_bg_color;
 			}
 
 			/* Disable default focus outline */
@@ -103,6 +99,12 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 				outline: none;
 			}
 
+			.vhandle {
+				background:  @unfocused_insensitive_color;
+			}
+			.vhandle:active {
+				background:  @theme_unfocused_fg_color;
+			}
 			""");
 
 		Gtk.StyleContext.add_provider_for_display(
@@ -112,53 +114,49 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 			//Gtk.STYLE_PROVIDER_PRIORITY_USER
 		);
 
-		this.view.enable_selection();
+
 		SimpleEdge.stroke.set_line_width(1.5f);
-		// this.view.stroke.set_line_width(2.4f);
-		this.view.stroke.set_line_cap(Gsk.LineCap.ROUND);
-		this.view.stroke.set_line_join(Gsk.LineJoin.ROUND);
+		// SimpleEdge.stroke.set_dash  ({8, 9});
+		// SimpleEdge.stroke.set_dash_offset(3);
 
+		this.view.enable_selection();
 
-		unowned	var graph = this.view.get_graph();
-		// graph.safe_set("ratio", "expand", "" );
-		graph.safe_set("ratio", "compress", "" );
-		// graph.safe_set("rankdir", "BT", "" );
-		graph.safe_set("rankdir", "LR", "" );
-		graph.safe_set("overlap", "false", "" );
+		this.view.graph.safe_set("rankdir", "LR", "" );
+		this.view.graph.safe_set("ratio", "compress", "" );
+		// this.view.graph.safe_set("ratio", "expand", "" );
+		this.view.graph.safe_set("overlap", "false", "" );
+		// this.view.graph.safe_set("mindist", "0.1", "" );
+
 	}
 
-	private void set_dot_layout(){
-		this.view.layout.layout_engine = "dot";
+	private void set_layout(string engine){
+		this.view.layout.layout_engine = engine;
+		this.view.layout.clean_layout();
 		this.view.layout.layout_changed ();
 	}
 
-	private void set_neato_layout(){
-		this.view.layout.layout_engine = "neato";
-		this.view.layout.layout_changed ();
-	}
-
-	private void set_sfdp_layout(){
-		this.view.layout.layout_engine = "sfdp";
-		this.view.layout.layout_changed ();
-	}
-
-	private void set_circo_layout(){
-		this.view.layout.layout_engine = "circo";
-		this.view.layout.layout_changed ();
-	}
-
-	private void set_twopi_layout(){
-		this.view.layout.layout_engine = "twopi";
-		this.view.layout.layout_changed ();
-	}
+	private void set_dot_layout()   { this.set_layout("dot"); }
+	private void set_neato_layout() { this.set_layout("neato"); }
+	private void set_sfdp_layout()  { this.set_layout("sfdp");  }
+	private void set_circo_layout() { this.set_layout("circo"); }
+	private void set_twopi_layout() { this.set_layout("twopi"); }
 
 	private void select_all () {
 		this.view.select_all();
 	}
 
 	[GtkCallback]
-	private void pic_clicked (Gtk.Widget btn) {
-		// i1.paintable = this.view.layout.get_dot_picture();
+	private void expander_toggled (Gtk.ToggleButton btn) {
+		foreach ( string k in this.view.members.get_keys() ) {
+			Gtk.Widget child = this.view.get_member(k);
+			if ( "vhandle" in child.get_css_classes() ) {
+				this.view.set_visibility(child, btn.get_active() );
+			}
+		}
+		if ( btn.get_active() )
+			btn.icon_name = "view-fullscreen-symbolic";
+		else
+			btn.icon_name = "view-restore-symbolic";
 	}
 
 	[GtkCallback]
@@ -168,14 +166,33 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 
 	[GtkCallback]
 	private void generate_click (Gtk.Button btn) {
-		Gtk.Button new_btn = new Gtk.Button.from_icon_name( icons[ GLib.Random.int_range(0, icons.length) ]);
-		// Gtk.Button new_btn = new Gtk.Button.with_label("btn %d".printf( (int) view.n_members ) );
-		int size = 50; // int.max( 50, GLib.Random.int_range(50, 150) );
+		Gtk.Button new_btn = generate_button();
 		new_btn.set_size_request(50, 30);
-		new_btn.clicked.connect(this.generate_click);
 		this.view.add_full_node( new_btn );
 		this.view.add_full_edge( btn, new_btn );
 		new_btn.grab_focus();
+	}
+
+	private void set_visibility (Gtk.Button btn) {
+		this.view.set_visibility(btn, ! btn.visible );
+	}
+
+
+
+	public Gtk.Button generate_button() {
+		Gtk.Button widget;
+		if ( n_nodes % 3 == 0 ) {
+			widget = new Gtk.Button.with_label("%d".printf( n_nodes ));
+			widget.clicked.connect(this.set_visibility);
+			widget.add_css_class("vhandle");
+		} else {
+			widget = new Gtk.Button.from_icon_name (
+						icons[ GLib.Random.int_range(0, icons.length) ] );
+			widget.clicked.connect(this.generate_click);
+			widget.add_css_class("ghandle");
+		}
+		n_nodes ++;
+		return widget;
 	}
 
 	public void generate_widgets(int n_nodes, int n_edges) {
@@ -183,33 +200,10 @@ public class Gtkdot.GraphWindow : Gtk.ApplicationWindow {
 		Gtk.Button widget;
 
 		for ( int i = 0; i < n_nodes; i ++ ) {
-			if ( i % 2 == 0 )
-				widget = new Gtk.Button.from_icon_name (
-						icons[ GLib.Random.int_range(0, icons.length) ] );
-			else
-				widget = new Gtk.Button.with_label("%d".printf(i));
-
-			if ( i % 2 == 0 )
-				widget.clicked.connect(this.generate_click);
-			else
-				widget.clicked.connect( (b)=>{
-					b.visible = false;
-				});
-			/*
-			int margin = ( i % 3 == 0 )
-				? int.max( 0, GLib.Random.int_range(10, 20) )
-				: 0;
-			widget.margin_top    = margin;
-			widget.margin_bottom = margin;
-			widget.margin_start  = margin;
-			widget.margin_end    = margin;
-			// widget.halign = Gtk.Align.CENTER;
-			*/
-			widget.set_size_request(50, 30);
-
+			widget = generate_button();
+			widget.set_size_request(50, 50);
 			this.view.add_full_node( widget );
 			nodes += widget;
-
 		}
 
 		for ( int i = 0; i < n_edges; i ++ ) {
@@ -246,8 +240,8 @@ public class Gtkdot.Application : Gtk.Application {
 		// keep the application running until we are done with this commandline
 		this.hold ();
 
-		int n_nodes = 10;
-		int n_edges = 10;
+		int n_nodes = 0;
+		int n_edges = 0;
 		OptionEntry[] options = new OptionEntry[2];
 		options[0] = { "nodes", 'n', OptionFlags.NONE, OptionArg.INT, ref n_nodes, "Number of nodes to generate", null };
 		options[1] = { "edges", 'e', OptionFlags.NONE, OptionArg.INT, ref n_edges, "Number of edges to generate", null };
