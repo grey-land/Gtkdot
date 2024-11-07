@@ -98,6 +98,35 @@ namespace Gtkdot {
 			return null;
 		}
 
+		public void remove_member(Gtk.Widget child) {
+			string key = get_widget_id(child);
+			if ( this.members.contains (key) ) {
+				SimpleMember lm = this.layout.get_member(child);
+				if ( lm != null ) {
+					if ( lm.kind == GraphMemberKind.NODE ){
+						Gvc.Node? n = _graph.find_node( key );
+						if ( n != null ) {
+							Gtk.Widget _e;
+							Gvc.Edge e;
+							for (e = _graph.get_first_edge_out(n); e != null; e = _graph.get_next_edge_out(e)) {
+								_e = this.get_member( e.name() );
+								_e.unparent();
+								this.members.remove( e.name() );
+							}
+							for (e = _graph.get_first_edge_in(n); e != null; e = _graph.get_next_edge_in(e)) {
+								_e = this.get_member( e.name() );
+								_e.unparent();
+								this.members.remove( e.name() );
+							}
+						}
+					}
+					lm.remove( _graph );
+					this.members.remove( key );
+					lm.child_widget.unparent();
+				}
+			}
+		}
+
 		public override void foreach_node(TraverseNode func, bool only_visible = false ) {
 			Gtk.Widget child = this.get_first_child ();
 			Gvc.Node node = _graph.get_first_node();
